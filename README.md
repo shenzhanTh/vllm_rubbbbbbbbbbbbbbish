@@ -39,7 +39,7 @@ vLLM支持
 
 1. 基于光源pytorch2.1.0基础镜像环境：镜像下载地址：[https://sourcefind.cn/#/image/dcu/pytorch](https://sourcefind.cn/#/image/dcu/pytorch)，根据pytorch2.1.0、python、dtk及系统下载对应的镜像版本。
 
-2. 基于现有python环境：安装pytorch2.1.0，pytorch whl包下载目录：[https://cancon.hpccube.com:65024/4/main/pytorch/DAS1.0](https://cancon.hpccube.com:65024/4/main/pytorch/DAS1.0)，根据python、dtk版本,下载对应pytorch2.1.0的whl包。安装命令如下：
+2. 基于现有python环境：安装pytorch2.1.0，pytorch whl包下载目录：[https://cancon.hpccube.com:65024/4/main/pytorch](https://cancon.hpccube.com:65024/4/main/pytorch)，根据python、dtk版本,下载对应pytorch2.1.0的whl包。安装命令如下：
 ```shell
 pip install torch* (下载的torch的whl包)
 pip install setuptools wheel
@@ -64,10 +64,10 @@ python3 setup.py install
 #### 运行基础环境准备
 1、使用基于光源pytorch2.1.0基础镜像环境：docker pull image.sourcefind.cn:5000/dcu/admin/base/pytorch:2.1.0-centos7.6-dtk24.04-py310 
 
-2、安装对应依赖的包：
-- triton:[https://cancon.hpccube.com:65024/4/main/triton/DAS1.0](https://cancon.hpccube.com:65024/4/main/triton/DAS1.0)
-- xformers:[https://cancon.hpccube.com:65024/4/main/xformers/DAS1.0](https://cancon.hpccube.com:65024/4/main/xformers/DAS1.0)
-- flash_attn: [https://cancon.hpccube.com:65024/4/main/flash_attn/DAS1.0](https://cancon.hpccube.com:65024/4/main/flash_attn/DAS1.0)
+2、安装以下依赖对应的包：
+- triton:[https://cancon.hpccube.com:65024/4/main/triton](https://cancon.hpccube.com:65024/4/main/triton)
+- xformers:[https://cancon.hpccube.com:65024/4/main/xformers](https://cancon.hpccube.com:65024/4/main/xformers)
+- flash_attn: [https://cancon.hpccube.com:65024/4/main/flash_attn](https://cancon.hpccube.com:65024/4/main/flash_attn/)
 
 
 #### 注意事项
