@@ -24,7 +24,8 @@ def _set_default_torch_dtype(dtype: torch.dtype):
 def _get_model_architecture(model_config: ModelConfig) -> Type[nn.Module]:
     architectures = getattr(model_config.hf_config, "architectures", [])
     if architectures == ['LlamaForCausalLM']:
-        os.environ['LLAMA_NN'] = '1'
+        if os.getenv('LLAMA_NN') != '0':  
+            os.environ['LLAMA_NN'] = '1'
     # Special handling for quantized Mixtral.
     # FIXME(woosuk): This is a temporary hack.
     if (model_config.quantization is not None
