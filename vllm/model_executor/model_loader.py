@@ -23,8 +23,8 @@ def _set_default_torch_dtype(dtype: torch.dtype):
 
 def _get_model_architecture(model_config: ModelConfig) -> Type[nn.Module]:
     architectures = getattr(model_config.hf_config, "architectures", [])
-    if architectures == ['LlamaForCausalLM']:
-        if os.getenv('LLAMA_NN') != '0':  
+    if architectures == ['LlamaForCausalLM'] or architectures == ['ChatGLMModel'] or architectures == ['BaichuanForCausalLM']:
+        if os.getenv('LLAMA_NN') != '0': 
             os.environ['LLAMA_NN'] = '1'
     # Special handling for quantized Mixtral.
     # FIXME(woosuk): This is a temporary hack.
