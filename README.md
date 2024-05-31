@@ -47,7 +47,7 @@ pip install setuptools wheel
 
 #### 源码编译安装
 ```shell
-git clone https://developer.hpccube.com/codes/aicomponent/vllm # 根据需要的分支进行切换
+git clone http://developer.hpccube.com/codes/OpenDAS/vllm.git # 根据需要的分支进行切换
 ```
 
 - 提供2种源码编译方式（进入vllm目录）：
