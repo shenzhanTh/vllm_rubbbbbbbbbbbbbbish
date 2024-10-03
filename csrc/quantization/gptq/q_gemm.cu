@@ -344,11 +344,6 @@ __global__ void gemm_half_q_half_gptq_4bit_kernel
                         block_c[m + 3][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 3) * a_stride), scales[2], block_c[m + 3][2]);
                         block_c[m + 3][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 3) * a_stride), scales[3], block_c[m + 3][3]);
 
-                        block_c[m + 3][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 3) * a_stride), scales[0], block_c[m + 3][0]);
-                        block_c[m + 3][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 3) * a_stride), scales[1], block_c[m + 3][1]);
-                        block_c[m + 3][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 3) * a_stride), scales[2], block_c[m + 3][2]);
-                        block_c[m + 3][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 3) * a_stride), scales[3], block_c[m + 3][3]);
-
                         block_c[m + 4][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 4) * a_stride), scales[0], block_c[m + 4][0]);
                         block_c[m + 4][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 4) * a_stride), scales[1], block_c[m + 4][1]);
                         block_c[m + 4][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 4) * a_stride), scales[2], block_c[m + 4][2]);
@@ -368,6 +363,8 @@ __global__ void gemm_half_q_half_gptq_4bit_kernel
                         block_c[m + 7][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 7) * a_stride), scales[1], block_c[m + 7][1]);
                         block_c[m + 7][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 7) * a_stride), scales[2], block_c[m + 7][2]);
                         block_c[m + 7][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 7) * a_stride), scales[3], block_c[m + 7][3]);
+
+                  
                     }
             /**********************************************循环展开********************************************/
             b_ptr += size_n;
