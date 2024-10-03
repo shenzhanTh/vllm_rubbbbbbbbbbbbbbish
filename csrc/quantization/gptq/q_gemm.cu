@@ -301,12 +301,14 @@ __global__ void gemm_half_q_half_gptq_4bit_kernel
         }
 
         #pragma unroll
+        // 加载 b 的数据到共享内存
+        __shared__ half2 dq[4][4]; // 共享内存用于存放解量化后的数据
         for (int j = 0; j < 4; j++)
         {
             const int4* b_ptr4 = (int4*) b_ptr;
             int4 load_int4 = *b_ptr4;
 
-            half2 dq[4][4];
+            //half2 dq[4][4];
             dequant_4bit_8_gptq(load_int4.x, dq[0], z1z16[0], y1y16[0], size_n, false);
             dequant_4bit_8_gptq(load_int4.y, dq[1], z1z16[1], y1y16[1], size_n, false);
             dequant_4bit_8_gptq(load_int4.z, dq[2], z1z16[2], y1y16[2], size_n, false);
