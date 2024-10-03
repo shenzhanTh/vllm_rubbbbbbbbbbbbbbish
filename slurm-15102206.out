@@ -1,0 +1,9 @@
+Namespace(backend='vllm', dataset='/data/ShareGPT_V3_unfiltered_cleaned_split.json', input_len=None, output_len=None, model='/work/models/Meta-Llama-3-8B-GPTQ/', tokenizer='/work/models/Meta-Llama-3-8B-GPTQ/', quantization='gptq', tensor_parallel_size=1, n=1, use_beam_search=False, num_prompts=32, seed=0, hf_max_batch_size=None, trust_remote_code=True, max_model_len=None, dtype='float16', enforce_eager=True, kv_cache_dtype='auto', device='cuda')
+Traceback (most recent call last):
+  File "/work/home/xdb4_60320/xdb-www/das1.0/das1_0/benchmark_throughput.py", line 343, in <module>
+    main(args)
+  File "/work/home/xdb4_60320/xdb-www/das1.0/das1_0/benchmark_throughput.py", line 205, in main
+    requests = sample_requests(args.dataset, args.num_prompts, tokenizer,
+  File "/work/home/xdb4_60320/xdb-www/das1.0/das1_0/benchmark_throughput.py", line 24, in sample_requests
+    with open(dataset_path) as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/data/ShareGPT_V3_unfiltered_cleaned_split.json'
