@@ -448,7 +448,12 @@ class QKVParallelLinear(ColumnParallelLinear):
 
                 loaded_weight_shard = loaded_weight.narrow(
                     output_dim, shard_offset, shard_size)
-                self.weight_loader(param, loaded_weight_shard, shard_id)
+                ######self.weight_loader(param, loaded_weight_shard, shard_id)
+                #########################
+                ###self.weight_loader(param, loaded_weight_shard, shard_id)
+                # 批量加载权重
+                param_data.copy_(loaded_weight_shard)  # 直接复制而不是逐个调用
+                #########################
             return
 
         tp_rank = get_tensor_model_parallel_rank()
