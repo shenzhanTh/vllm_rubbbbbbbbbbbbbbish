@@ -22,54 +22,64 @@
 # limitations under the License.
 """Inference-only LLaMA model compatible with HuggingFace weights."""
 from typing import Any, Dict, List, Optional, Tuple
+
 import torch
 from torch import nn
-import cupy as cp  # Ensure cupy is installed for cuBLAS
-import math
+from transformers import LlamaConfig
 
-class OptimizedLinear(nn.Module):
-    def __init__(self, in_features: int, out_features: int, bias: bool = False):
-        super().__init__()
-        self.weight = nn.Parameter(torch.empty(out_features, in_features).cuda())
-        if bias:
-            self.bias = nn.Parameter(torch.empty(out_features).cuda())
-        else:
-            self.register_parameter('bias', None)
-        self.reset_parameters()
+from vllm.config import LoRAConfig
+from vllm.model_executor.input_metadata import InputMetadata
+from vllm.model_executor.layers.activation import SiluAndMul
+from vllm.model_executor.layers.attention import PagedAttention
+from vllm.model_executor.layers.layernorm import RMSNorm
+from vllm.model_executor.layers.linear import (LinearMethodBase,
+                                               MergedColumnParallelLinear,
+                                               QKVParallelLinear,
+                                               RowParallelLinear)
+from vllm.model_executor.layers.rotary_embedding import get_rope
+from vllm.model_executor.layers.sampler import Sampler
+from vllm.model_executor.layers.vocab_parallel_embedding import (
+    VocabParallelEmbedding, ParallelLMHead, DEFAULT_VOCAB_PADDING_SIZE)
+from vllm.model_executor.parallel_utils.parallel_state import (
+    get_tensor_model_parallel_world_size)
+from vllm.model_executor.sampling_metadata import SamplingMetadata
+from vllm.model_executor.weight_utils import (default_weight_loader,
+                                              hf_model_weights_iterator)
+from vllm.sequence import SamplerOutput
 
-    def reset_parameters(self):
-        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1 / math.sqrt(fan_in)
-            nn.init.uniform_(self.bias, -bound, bound)
+KVCache = Tuple[torch.Tensor, torch.Tensor]
 
-    def forward(self, input: torch.Tensor):
-        input_cuda = input.cuda()  # Ensure input is on the GPU
-        output = cp.empty((input_cuda.size(0), self.weight.size(0)), dtype=cp.float32)
-        cp.linalg.multi_dot([input_cuda, self.weight.T], out=output)
-        if self.bias is not None:
-            output += self.bias
-        return output
 
 class LlamaMLP(nn.Module):
-    def __init__(self, hidden_size: int, intermediate_size: int, hidden_act: str):
+
+    def __init__(
+        self,
+        hidden_size: int,
+        intermediate_size: int,
+        hidden_act: str,
+        linear_method: Optional[LinearMethodBase] = None,
+    ) -> None:
         super().__init__()
-        self.gate_up_proj = OptimizedLinear(hidden_size, intermediate_size * 2, bias=False)
-        self.down_proj = OptimizedLinear(intermediate_size, hidden_size, bias=False)
+        self.gate_up_proj = MergedColumnParallelLinear(
+            hidden_size, [intermediate_size] * 2,
+            bias=False,
+            linear_method=linear_method)
+        self.down_proj = RowParallelLinear(intermediate_size,
+                                           hidden_size,
+                                           bias=False,
+                                           linear_method=linear_method)
         if hidden_act != "silu":
-            raise ValueError(f"Unsupported activation: {hidden_act}. Only silu is supported for now.")
-        self.act_fn = nn.SiLU()
+            raise ValueError(f"Unsupported activation: {hidden_act}. "
+                             "Only silu is supported for now.")
+        self.act_fn = SiluAndMul()
 
     def forward(self, x):
-        gate_up = self.gate_up_proj(x)
+        gate_up, _ = self.gate_up_proj(x)
         x = self.act_fn(gate_up)
-        x = self.down_proj(x)
+        x, _ = self.down_proj(x)
         return x
-    
-    
-    
-    
+
+
 class LlamaAttention(nn.Module):
 
     def __init__(
