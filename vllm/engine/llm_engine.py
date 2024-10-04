@@ -660,11 +660,29 @@ class LLMEngine:
         new_finished_seqs = [(seq, parent, True) for seq, parent in child_seqs
                              if seq.is_finished()]
         all_finished_seqs = existing_finished_seqs + new_finished_seqs
+        
+        
         # Sort the finished sequences by their scores.
-        all_finished_seqs.sort(key=lambda x: x[0].get_beam_search_score(
+        # all_finished_seqs.sort(key=lambda x: x[0].get_beam_search_score(
+        #     length_penalty=length_penalty,
+        #     eos_token_id=self.get_tokenizer_for_seq(x[0]).eos_token_id),
+        #                        reverse=True)
+        # 设置分数剪枝阈值，避免处理低于阈值的序列
+        # 设置分数剪枝阈值，避免处理低于阈值的序列
+        pruning_threshold = 0.1  # 可以根据实际情况调整
+
+        # 对所有完成的序列进行排序
+        all_finished_seqs.sort(key=lambda seq_tuple: seq_tuple[0].get_beam_search_score(
             length_penalty=length_penalty,
-            eos_token_id=self.get_tokenizer_for_seq(x[0]).eos_token_id),
-                               reverse=True)
+            eos_token_id=self.get_tokenizer_for_seq(seq_tuple[0]).eos_token_id), reverse=True)
+
+        # 只保留分数高于阈值的序列
+        all_finished_seqs = [seq_tuple for seq_tuple in all_finished_seqs if seq_tuple[0].get_beam_search_score(
+            length_penalty=length_penalty,
+            eos_token_id=self.get_tokenizer_for_seq(seq_tuple[0]).eos_token_id) > pruning_threshold]
+
+        
+        
         for seq, parent, is_new in all_finished_seqs[:beam_width]:
             if is_new:
                 # A newly generated child sequence finishes and has a high
@@ -1027,10 +1045,18 @@ class LLMEngine:
             output_channels = self.forward_dag.execute(1)
         else:
             # Start the ray workers first.
-            ray_worker_outputs = [
-                worker.execute_method.remote(method, *args, **kwargs)
-                for worker in self.workers
-            ]
+            # ----------------------HEAD-----------------------
+            # 批量执行 Ray workers
+            batch_size = 10  # 可以根据实际情况调整
+            ray_worker_outputs = []
+            for i in range(0, len(self.workers), batch_size):
+                batch_workers = self.workers[i:i + batch_size]
+                worker_outputs = [
+                    worker.execute_method.remote(method, *args, **kwargs)
+                    for worker in batch_workers
+                ]
+            ray_worker_outputs.extend(ray.get(worker_outputs))
+            # ----------------------END-----------------------
 
         if driver_args is None:
             driver_args = args
