@@ -229,7 +229,7 @@ __global__ void gemm_half_q_half_gptq_4bit_kernel
 
     int n = offset_n + t * 4;
 
-    // Preload block_a
+       // Preload block_a
     __shared__ half block_a[m_count][BLOCK_KN_SIZE];
     // 预加载数据时考虑更多的展开
     if (offset_k + t < end_k) {

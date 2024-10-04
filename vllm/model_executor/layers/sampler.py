@@ -107,8 +107,11 @@ class Sampler(nn.Module):
 
         # We use float32 for probabilities and log probabilities.
         # Compute the probabilities.
-        #修改为半精度
         probs = torch.softmax(logits, dim=-1, dtype=torch.float16)
+        # Compute the log probabilities.
+        # Use log_softmax to ensure numerical stability.
+        #修改为半精度
+        # probs = torch.softmax(logits, dim=-1, dtype=torch.float16)
         # Compute the log probabilities.
         # Use log_softmax to ensure numerical stability.
         #修改为半精度
