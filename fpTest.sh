@@ -11,4 +11,4 @@ conda activate llama333
 module rm compiler/dtk/21.10
 module load compiler/dtk/24.04
 export LD_LIBRARY_PATH=/work/home/xdb4_60320/xdb-www/das1.0/das1_0/rocblas-install/lib:$LD_LIBRARY_PATH
- python -m cProfile -o outputfp6.prof  /work/home/xdb4_60320/xdb-www/das1.0/das1_0/benchmark_throughput.py --num-prompts 32 --model /work/models/Meta-Llama-3-8B --dataset /work/models/data/ShareGPT_V3_unfiltered_cleaned_split.json --trust-remote-code --enforce-eager --dtype float16
+ python -m cProfile -o outputfp6.prof  /work/home/xdb4_60320/xdb-www/das1.0/das1_0/vllm/benchmark_throughput.py --num-prompts 32 --model /work/models/Meta-Llama-3-8B --dataset /work/models/data/ShareGPT_V3_unfiltered_cleaned_split.json --trust-remote-code --enforce-eager --dtype float16
