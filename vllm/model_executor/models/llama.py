@@ -48,6 +48,7 @@ class OptimizedLinear(nn.Module):
         input_cuda = input.cuda()  # Ensure input is on the GPU
         output = cp.empty((input_cuda.size(0), self.weight.size(0)), dtype=cp.float32)
         cp.linalg.multi_dot([input_cuda, self.weight.T], out=output)
+	print(11111111111111111111)
         if self.bias is not None:
             output += self.bias
         return output
@@ -353,6 +354,7 @@ class LlamaForCausalLM(nn.Module):
         params_dict = dict(self.named_parameters())
         for name, loaded_weight in hf_model_weights_iterator(
                 model_name_or_path, cache_dir, load_format, revision):
+		print(111111222222222222)
             if "rotary_emb.inv_freq" in name:
                 continue
             if ("rotary_emb.cos_cached" in name

@@ -229,22 +229,35 @@ __global__ void gemm_half_q_half_gptq_4bit_kernel
 
     int n = offset_n + t * 4;
 
-    // Preload block_a
+       // Preload block_a
     __shared__ half block_a[m_count][BLOCK_KN_SIZE];
+    // 预加载数据时考虑更多的展开
+    if (offset_k + t < end_k) {
+    for (int m = 0; m < m_count; m += 8) {
+        const half* a_ptr = a_.item_ptr(offset_m + m, 0);
+        half* block_a_ptr = block_a[m];
 
-    if (offset_k + t < end_k)
-    {
-        for (int m = 0; m < m_count; ++m)
-        {
-            const half* a_ptr = a_.item_ptr(offset_m + m, 0);
-            half* block_a_ptr = block_a[m];
-
+        for (int j = 0; j < 8 && (m + j) < m_count; j++) {
             half a0;
             if (b_q_perm) a0 = a_ptr[b_q_perm[offset_k + t]];
             else a0 = a_ptr[offset_k + t];
-            block_a_ptr[t] = a0;
+            block_a_ptr[j] = a0;
         }
     }
+}
+    // if (offset_k + t < end_k)
+    // {
+    //     for (int m = 0; m < m_count; ++m)
+    //     {
+    //         const half* a_ptr = a_.item_ptr(offset_m + m, 0);
+    //         half* block_a_ptr = block_a[m];
+
+    //         half a0;
+    //         if (b_q_perm) a0 = a_ptr[b_q_perm[offset_k + t]];
+    //         else a0 = a_ptr[offset_k + t];
+    //         block_a_ptr[t] = a0;
+    //     }
+    // }
 
     // Zero output
     if (n >= size_n) return;
@@ -301,14 +314,11 @@ __global__ void gemm_half_q_half_gptq_4bit_kernel
         }
 
         #pragma unroll
-        // 加载 b 的数据到共享内存
-        __shared__ half2 dq[4][4]; // 共享内存用于存放解量化后的数据
+        __shared__ half2 dq[4][4];
         for (int j = 0; j < 4; j++)
         {
             const int4* b_ptr4 = (int4*) b_ptr;
             int4 load_int4 = *b_ptr4;
-
-            //half2 dq[4][4];
             dequant_4bit_8_gptq(load_int4.x, dq[0], z1z16[0], y1y16[0], size_n, false);
             dequant_4bit_8_gptq(load_int4.y, dq[1], z1z16[1], y1y16[1], size_n, false);
             dequant_4bit_8_gptq(load_int4.z, dq[2], z1z16[2], y1y16[2], size_n, false);
@@ -324,51 +334,57 @@ __global__ void gemm_half_q_half_gptq_4bit_kernel
             //}
 
 	    		/**********************************************循环展开********************************************/
-            			for (int m = 0; m < m_count; m += 8)
-                    {
-                        block_c[m][0] = fma(dot22_8_f(dq[0], a_ptr + m * a_stride), scales[0], block_c[m][0]);
-                        block_c[m][1] = fma(dot22_8_f(dq[1], a_ptr + m * a_stride), scales[1], block_c[m][1]);
-                        block_c[m][2] = fma(dot22_8_f(dq[2], a_ptr + m * a_stride), scales[2], block_c[m][2]);
-                        block_c[m][3] = fma(dot22_8_f(dq[3], a_ptr + m * a_stride), scales[3], block_c[m][3]);
+            		// 	for (int m = 0; m < m_count; m += 8)
+                    // {
+                    //     block_c[m][0] = fma(dot22_8_f(dq[0], a_ptr + m * a_stride), scales[0], block_c[m][0]);
+                    //     block_c[m][1] = fma(dot22_8_f(dq[1], a_ptr + m * a_stride), scales[1], block_c[m][1]);
+                    //     block_c[m][2] = fma(dot22_8_f(dq[2], a_ptr + m * a_stride), scales[2], block_c[m][2]);
+                    //     block_c[m][3] = fma(dot22_8_f(dq[3], a_ptr + m * a_stride), scales[3], block_c[m][3]);
 
-                        block_c[m + 1][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 1) * a_stride), scales[0], block_c[m + 1][0]);
-                        block_c[m + 1][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 1) * a_stride), scales[1], block_c[m + 1][1]);
-                        block_c[m + 1][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 1) * a_stride), scales[2], block_c[m + 1][2]);
-                        block_c[m + 1][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 1) * a_stride), scales[3], block_c[m + 1][3]);
+                    //     block_c[m + 1][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 1) * a_stride), scales[0], block_c[m + 1][0]);
+                    //     block_c[m + 1][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 1) * a_stride), scales[1], block_c[m + 1][1]);
+                    //     block_c[m + 1][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 1) * a_stride), scales[2], block_c[m + 1][2]);
+                    //     block_c[m + 1][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 1) * a_stride), scales[3], block_c[m + 1][3]);
 
-                        block_c[m + 2][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 2) * a_stride), scales[0], block_c[m + 2][0]);
-                        block_c[m + 2][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 2) * a_stride), scales[1], block_c[m + 2][1]);
-                        block_c[m + 2][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 2) * a_stride), scales[2], block_c[m + 2][2]);
-                        block_c[m + 2][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 2) * a_stride), scales[3], block_c[m + 2][3]);
+                    //     block_c[m + 2][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 2) * a_stride), scales[0], block_c[m + 2][0]);
+                    //     block_c[m + 2][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 2) * a_stride), scales[1], block_c[m + 2][1]);
+                    //     block_c[m + 2][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 2) * a_stride), scales[2], block_c[m + 2][2]);
+                    //     block_c[m + 2][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 2) * a_stride), scales[3], block_c[m + 2][3]);
 
-                        block_c[m + 3][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 3) * a_stride), scales[0], block_c[m + 3][0]);
-                        block_c[m + 3][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 3) * a_stride), scales[1], block_c[m + 3][1]);
-                        block_c[m + 3][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 3) * a_stride), scales[2], block_c[m + 3][2]);
-                        block_c[m + 3][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 3) * a_stride), scales[3], block_c[m + 3][3]);
+                    //     block_c[m + 3][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 3) * a_stride), scales[0], block_c[m + 3][0]);
+                    //     block_c[m + 3][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 3) * a_stride), scales[1], block_c[m + 3][1]);
+                    //     block_c[m + 3][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 3) * a_stride), scales[2], block_c[m + 3][2]);
+                    //     block_c[m + 3][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 3) * a_stride), scales[3], block_c[m + 3][3]);
 
-                        block_c[m + 4][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 4) * a_stride), scales[0], block_c[m + 4][0]);
-                        block_c[m + 4][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 4) * a_stride), scales[1], block_c[m + 4][1]);
-                        block_c[m + 4][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 4) * a_stride), scales[2], block_c[m + 4][2]);
-                        block_c[m + 4][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 4) * a_stride), scales[3], block_c[m + 4][3]);
+                    //     block_c[m + 3][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 3) * a_stride), scales[0], block_c[m + 3][0]);
+                    //     block_c[m + 3][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 3) * a_stride), scales[1], block_c[m + 3][1]);
+                    //     block_c[m + 3][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 3) * a_stride), scales[2], block_c[m + 3][2]);
+                    //     block_c[m + 3][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 3) * a_stride), scales[3], block_c[m + 3][3]);
 
-                        block_c[m + 5][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 5) * a_stride), scales[0], block_c[m + 5][0]);
-                        block_c[m + 5][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 5) * a_stride), scales[1], block_c[m + 5][1]);
-                        block_c[m + 5][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 5) * a_stride), scales[2], block_c[m + 5][2]);
-                        block_c[m + 5][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 5) * a_stride), scales[3], block_c[m + 5][3]);
+                    //     block_c[m + 4][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 4) * a_stride), scales[0], block_c[m + 4][0]);
+                    //     block_c[m + 4][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 4) * a_stride), scales[1], block_c[m + 4][1]);
+                    //     block_c[m + 4][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 4) * a_stride), scales[2], block_c[m + 4][2]);
+                    //     block_c[m + 4][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 4) * a_stride), scales[3], block_c[m + 4][3]);
 
-                        block_c[m + 6][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 6) * a_stride), scales[0], block_c[m + 6][0]);
-                        block_c[m + 6][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 6) * a_stride), scales[1], block_c[m + 6][1]);
-                        block_c[m + 6][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 6) * a_stride), scales[2], block_c[m + 6][2]);
-                        block_c[m + 6][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 6) * a_stride), scales[3], block_c[m + 6][3]);
+                    //     block_c[m + 5][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 5) * a_stride), scales[0], block_c[m + 5][0]);
+                    //     block_c[m + 5][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 5) * a_stride), scales[1], block_c[m + 5][1]);
+                    //     block_c[m + 5][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 5) * a_stride), scales[2], block_c[m + 5][2]);
+                    //     block_c[m + 5][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 5) * a_stride), scales[3], block_c[m + 5][3]);
 
-                        block_c[m + 7][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 7) * a_stride), scales[0], block_c[m + 7][0]);
-                        block_c[m + 7][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 7) * a_stride), scales[1], block_c[m + 7][1]);
-                        block_c[m + 7][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 7) * a_stride), scales[2], block_c[m + 7][2]);
-                        block_c[m + 7][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 7) * a_stride), scales[3], block_c[m + 7][3]);
+                    //     block_c[m + 6][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 6) * a_stride), scales[0], block_c[m + 6][0]);
+                    //     block_c[m + 6][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 6) * a_stride), scales[1], block_c[m + 6][1]);
+                    //     block_c[m + 6][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 6) * a_stride), scales[2], block_c[m + 6][2]);
+                    //     block_c[m + 6][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 6) * a_stride), scales[3], block_c[m + 6][3]);
 
-                  
-                    }
+                    //     block_c[m + 7][0] = fma(dot22_8_f(dq[0], a_ptr + (m + 7) * a_stride), scales[0], block_c[m + 7][0]);
+                    //     block_c[m + 7][1] = fma(dot22_8_f(dq[1], a_ptr + (m + 7) * a_stride), scales[1], block_c[m + 7][1]);
+                    //     block_c[m + 7][2] = fma(dot22_8_f(dq[2], a_ptr + (m + 7) * a_stride), scales[2], block_c[m + 7][2]);
+                    //     block_c[m + 7][3] = fma(dot22_8_f(dq[3], a_ptr + (m + 7) * a_stride), scales[3], block_c[m + 7][3]);
+                    // }
             /**********************************************循环展开********************************************/
+             for (int m = 0; m < m_count; m++) {
+            block_c[m][j] = fma(dot22_8_f(dq[j], a_ptr + m * a_stride), scales[j], block_c[m][j]);
+        }
             b_ptr += size_n;
             a_ptr += 8;
         }
