@@ -1,13 +1,0 @@
-Namespace(backend='vllm', dataset=None, input_len=8, output_len=8, model='/work/models/Meta-Llama-3-8B/', tokenizer='/work/models/Meta-Llama-3-8B/', quantization=None, tensor_parallel_size=1, n=1, use_beam_search=False, num_prompts=8, seed=0, hf_max_batch_size=None, trust_remote_code=True, max_model_len=None, dtype='float16', enforce_eager=True, kv_cache_dtype='auto', device='cuda')
-WARNING 10-03 14:56:22 config.py:618] Casting torch.bfloat16 to torch.float16.
-INFO 10-03 14:56:22 llm_engine.py:87] Initializing an LLM engine with config: model='/work/models/Meta-Llama-3-8B/', tokenizer='/work/models/Meta-Llama-3-8B/', tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.float16, max_seq_len=8192, download_dir=None, load_format=auto, tensor_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, kv_cache_dtype=auto, device_config=cuda, seed=0)
-WARNING: Logging before InitGoogleLogging() is written to STDERR
-I1003 14:56:23.242571 108184 ProcessGroupNCCL.cpp:686] [Rank 0] ProcessGroupNCCL initialization options:NCCL_ASYNC_ERROR_HANDLING: 1, NCCL_DESYNC_DEBUG: 0, NCCL_ENABLE_TIMING: 0, NCCL_BLOCKING_WAIT: 0, TIMEOUT(ms): 1800000, USE_HIGH_PRIORITY_STREAM: 0, TORCH_DISTRIBUTED_DEBUG: OFF, NCCL_DEBUG: OFF, ID=94143329774512
-I1003 14:56:24.152845 108184 ProcessGroupNCCL.cpp:1340] NCCL_DEBUG: N/A
-I1003 14:56:24.179028 108184 ProcessGroupNCCL.cpp:686] [Rank 0] ProcessGroupNCCL initialization options:NCCL_ASYNC_ERROR_HANDLING: 1, NCCL_DESYNC_DEBUG: 0, NCCL_ENABLE_TIMING: 0, NCCL_BLOCKING_WAIT: 0, TIMEOUT(ms): 1800000, USE_HIGH_PRIORITY_STREAM: 0, TORCH_DISTRIBUTED_DEBUG: OFF, NCCL_DEBUG: OFF, ID=94143329632944
-I1003 14:56:24.179353 108184 ProcessGroupNCCL.cpp:686] [Rank 0] ProcessGroupNCCL initialization options:NCCL_ASYNC_ERROR_HANDLING: 1, NCCL_DESYNC_DEBUG: 0, NCCL_ENABLE_TIMING: 0, NCCL_BLOCKING_WAIT: 0, TIMEOUT(ms): 1800000, USE_HIGH_PRIORITY_STREAM: 0, TORCH_DISTRIBUTED_DEBUG: OFF, NCCL_DEBUG: OFF, ID=94143347166368
-INFO 10-03 14:56:42 llm_engine.py:357] # GPU blocks: 20468, # CPU blocks: 2048
-Processed prompts:   0%|          | 0/8 [00:00<?, ?it/s]Processed prompts:  12%|█▎        | 1/8 [00:00<00:02,  3.16it/s]Processed prompts: 100%|██████████| 8/8 [00:00<00:00, 25.30it/s]
-Latency: 0.32 s
-All Throughput: 25.18 requests/s, 402.93 tokens/s
-Generate Throughput: 201.47 tokens/s

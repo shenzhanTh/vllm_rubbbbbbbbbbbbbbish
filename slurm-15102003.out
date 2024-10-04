@@ -1,9 +1,0 @@
-Could not find conda environment: llama
-You can list all discoverable environments with `conda info --envs`.
-
-Traceback (most recent call last):
-  File "/work/home/xdb4_60320/xdb-www/das1.0/das1_0/benchmark_throughput.py", line 8, in <module>
-    import torch
-  File "/public/software/apps/anaconda3/5.2.0/lib/python3.6/site-packages/torch/__init__.py", line 197, in <module>
-    from torch._C import *  # noqa: F403
-ImportError: libglog.so.0: cannot open shared object file: No such file or directory
