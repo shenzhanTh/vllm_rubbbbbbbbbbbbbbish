@@ -161,7 +161,7 @@ class PagedAttention(nn.Module):
                 # Set attention bias if not provided. This typically happens at
                 # the very attention layer of every iteration.
                 # FIXME(woosuk): This is a hack.
-                """if input_metadata.attn_bias is None:
+                if input_metadata.attn_bias is None:
                     if self.alibi_slopes is None:
                         attn_bias = BlockDiagonalCausalMask.from_seqlens(
                             [seq_len] * batch_size)
@@ -172,13 +172,7 @@ class PagedAttention(nn.Module):
                     else:
                         input_metadata.attn_bias = _make_alibi_bias(
                             self.alibi_slopes, self.num_kv_heads, batch_size,
-                            seq_len, query.dtype)"""
-                if input_metadata.attn_bias is None:
-                # 优化：合并attn_bias计算逻辑
-                    attn_bias = (BlockDiagonalCausalMask.from_seqlens([seq_len] * batch_size)
-                             .make_local_attention(self.sliding_window) if self.sliding_window else None)
-                    input_metadata.attn_bias = attn_bias if attn_bias is not None else _make_alibi_bias(
-                    self.alibi_slopes, self.num_kv_heads, batch_size, seq_len, query.dtype)
+                            seq_len, query.dtype)
 
                 if self.use_ref_attention:
                     output = self.ref_masked_attention(
@@ -264,6 +258,7 @@ def _make_alibi_bias(
     # When using custom attention bias, xformers requires the bias to
     # be sliced from a tensor whose length is a multiple of 8.
     padded_len = (seq_len + 7) // 8 * 8
+    print(alibi_slopes)
     num_heads = alibi_slopes.shape[0]
     bias = torch.empty(
         batch_size,

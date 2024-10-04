@@ -9,10 +9,6 @@ import torch
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           PreTrainedTokenizerBase)
 from tqdm import tqdm
-import sys
-import os
-sys.path.insert(0, '/work/home/xdb4_60320/xdb-www/das1.0/das1_0/vllm')
-
 def sample_requests(
     dataset_path: str,
     num_requests: int,
