@@ -1028,15 +1028,39 @@ class LLMEngine:
         else:
             # Start the ray workers first.
             # ----------------------HEAD-----------------------
-            # 执行任务，逐个调用 Ray workers
-            ray_worker_outputs = [
-                worker.execute_method.remote(method, *args, **kwargs)
-                for worker in self.workers
-            ]
+            # # 执行任务，逐个调用 Ray workers
+            # ray_worker_outputs = [
+            #     worker.execute_method.remote(method, *args, **kwargs)
+            #     for worker in self.workers
+            # ]
 
-            ray_worker_outputs = ray.get(ray_worker_outputs)
+            # ray_worker_outputs = ray.get(ray_worker_outputs)
             # ----------------------END-----------------------
+            # 定义批次大小
+            batch_size = 10  # 可以根据实际情况调整
 
+            # 用于存储所有批次的结果
+            ray_worker_outputs = []
+
+            # 分批调度 Ray Workers
+            for i in range(0, len(self.workers), batch_size):
+                # 从 workers 中选择当前批次的 worker
+                batch_workers = self.workers[i:i + batch_size]
+                
+                # 为当前批次的 worker 执行远程方法
+                current_batch_outputs = [
+                    worker.execute_method.remote(method, *args, **kwargs)
+                    for worker in batch_workers
+                ]
+                
+                # 使用 ray.get() 获取当前批次 worker 的结果
+                ray_worker_outputs.extend(ray.get(current_batch_outputs))
+
+            # 最终 ray_worker_outputs 包含所有 worker 的结果
+
+            
+            
+            
         if driver_args is None:
             driver_args = args
         if driver_kwargs is None:
