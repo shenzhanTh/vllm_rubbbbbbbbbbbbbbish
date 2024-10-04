@@ -76,7 +76,8 @@ class Sampler(nn.Module):
 
         assert logits is not None
         _, vocab_size = logits.shape
-
+        #修改为精度
+        logits = logits.half()
         # Apply logits processors (if any).
         logits = _apply_logits_processors(logits, sampling_metadata)
 
@@ -106,10 +107,12 @@ class Sampler(nn.Module):
 
         # We use float32 for probabilities and log probabilities.
         # Compute the probabilities.
-        probs = torch.softmax(logits, dim=-1, dtype=torch.float)
+        #修改为半精度
+        probs = torch.softmax(logits, dim=-1, dtype=torch.float16)
         # Compute the log probabilities.
         # Use log_softmax to ensure numerical stability.
-        logprobs = torch.log_softmax(logits, dim=-1, dtype=torch.float)
+        #修改为半精度
+        logprobs = torch.log_softmax(logits, dim=-1, dtype=torch.float16)
 
         # Sample the next tokens.
         sample_results = _sample(probs, logprobs, sampling_metadata)
