@@ -84,25 +84,6 @@ class LLMEngine:
         placement_group: Optional["PlacementGroup"],
         log_stats: bool,
     ) -> None:
-        logger.info(
-            "Initializing an LLM engine with config: "
-            f"model={model_config.model!r}, "
-            f"tokenizer={model_config.tokenizer!r}, "
-            f"tokenizer_mode={model_config.tokenizer_mode}, "
-            f"revision={model_config.revision}, "
-            f"tokenizer_revision={model_config.tokenizer_revision}, "
-            f"trust_remote_code={model_config.trust_remote_code}, "
-            f"dtype={model_config.dtype}, "
-            f"max_seq_len={model_config.max_model_len}, "
-            f"download_dir={model_config.download_dir!r}, "
-            f"load_format={model_config.load_format}, "
-            f"tensor_parallel_size={parallel_config.tensor_parallel_size}, "
-            f"disable_custom_all_reduce={parallel_config.disable_custom_all_reduce}, "
-            f"quantization={model_config.quantization}, "
-            f"enforce_eager={model_config.enforce_eager}, "
-            f"kv_cache_dtype={cache_config.cache_dtype}, "
-            f"device_config={device_config.device}, "
-            f"seed={model_config.seed})")
         # TODO(woosuk): Print more configs in debug mode.
 
         self.model_config = model_config
@@ -113,7 +94,8 @@ class LLMEngine:
         self.device_config = device_config
         self.log_stats = log_stats
         self._verify_args()
-
+			#logger.debug(f"Config: model_config={model_config}, cache_config={cache_config}")
+        logger.info(f"Config: model_config={model_config}, cache_config={cache_config}")
         self._init_tokenizer()
         self.seq_counter = Counter()
 
