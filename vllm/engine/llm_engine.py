@@ -1046,16 +1046,13 @@ class LLMEngine:
         else:
             # Start the ray workers first.
             # ----------------------HEAD-----------------------
-            # 批量执行 Ray workers
-            batch_size = 10  # 可以根据实际情况调整
-            ray_worker_outputs = []
-            for i in range(0, len(self.workers), batch_size):
-                batch_workers = self.workers[i:i + batch_size]
-                worker_outputs = [
-                    worker.execute_method.remote(method, *args, **kwargs)
-                    for worker in batch_workers
-                ]
-            ray_worker_outputs.extend(ray.get(worker_outputs))
+            # 执行任务，逐个调用 Ray workers
+            ray_worker_outputs = [
+                worker.execute_method.remote(method, *args, **kwargs)
+                for worker in self.workers
+            ]
+
+            ray_worker_outputs = ray.get(ray_worker_outputs)
             # ----------------------END-----------------------
 
         if driver_args is None:
