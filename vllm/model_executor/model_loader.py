@@ -54,7 +54,7 @@ def _get_model_architecture(model_config: ModelConfig) -> Type[nn.Module]:
 def get_model(model_config: ModelConfig, device_config: DeviceConfig, **kwargs) -> nn.Module:
     lora_config = kwargs.get("lora_config", None)
     model_class = _get_model_architecture(model_config)
-
+    logger.info("\n\nhere is modefied on get_model\n\n")
     # 获取线性方法（可能是量化）
     linear_method = None
     if model_config.quantization:
