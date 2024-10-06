@@ -403,7 +403,7 @@ class LlamaForCausalLM(nn.Module):
             # logger.info("change the switch")
             if "rotary_emb.inv_freq" in name or ("rotary_emb.cos_cached" in name or "rotary_emb.sin_cached" in name):
                     continue
-            for (param_name, weight_name, shard_id) in stacked_params_mapping.items():
+            for param_name, (weight_name, shard_id) in stacked_params_mapping.items():
                 # loop_count += 1,loop_count==1134
                 if weight_name not in name:
                     continue
