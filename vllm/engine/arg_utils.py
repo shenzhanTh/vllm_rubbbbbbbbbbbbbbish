@@ -16,13 +16,13 @@ class EngineArgs:
     trust_remote_code: bool = False
     download_dir: Optional[str] = None
     load_format: str = 'auto'
-    dtype: str = 'auto'
-    kv_cache_dtype: str = 'auto'
+    dtype: str = 'float16'
+    kv_cache_dtype: str = 'float16'
     seed: int = 0
     max_model_len: Optional[int] = None
     worker_use_ray: bool = False
-    pipeline_parallel_size: int = 1
-    tensor_parallel_size: int = 1
+    pipeline_parallel_size: int = 4
+    tensor_parallel_size: int = 4
     max_parallel_loading_workers: Optional[int] = None
     block_size: int = 16
     swap_space: int = 4  # GiB

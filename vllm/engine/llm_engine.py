@@ -365,8 +365,10 @@ class LLMEngine:
     def from_engine_args(cls, engine_args: EngineArgs) -> "LLMEngine":
         """Creates an LLM engine from the engine arguments."""
         # Create the engine configs.
+        
         engine_configs = engine_args.create_engine_configs()
         parallel_config = engine_configs[2]
+        logger.debug("Initializing engine ", parallel_config)
         # Initialize the cluster.
         placement_group = initialize_cluster(parallel_config)
         # Create the LLM engine.
@@ -1037,8 +1039,9 @@ class LLMEngine:
             # ray_worker_outputs = ray.get(ray_worker_outputs)
             # ----------------------END-----------------------
             # 定义批次大小
+            
             batch_size = 32  # 可以根据实际情况调整
-
+            logger.debug("Batch size: {}".format(batch_size))
             # 用于存储所有批次的结果
             ray_worker_outputs = []
 
