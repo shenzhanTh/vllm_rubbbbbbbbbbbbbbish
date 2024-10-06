@@ -11,7 +11,7 @@ import triton.language as tl
 @triton.jit
 def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements):
     pid = tl.program_id(0)
-    block_size = tl.block_size
+    block_size = 64
     idx = pid * block_size + tl.arange(0, block_size)
 
     # 使用掩码避免越界
