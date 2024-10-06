@@ -217,6 +217,7 @@ class ColumnParallelLinear(torch.nn.Module):
             self.register_parameter("bias", None)
         self.use_llama_nn = os.environ.get('LLAMA_NN') == '1'
 
+    @torch.compile
     def weight_loader(self, param: Parameter, loaded_weight: torch.Tensor):
         tp_rank = get_tensor_model_parallel_rank()
         output_dim = getattr(param, "output_dim", None)
@@ -284,7 +285,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         super().__init__(input_size, sum(output_sizes), bias, gather_output,
                          skip_bias_add, params_dtype, linear_method)
         self.use_llama_nn = os.environ.get('LLAMA_NN') == '1'
-
 
     def weight_loader(self,
                       param: Parameter,
@@ -364,10 +364,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             assert param_data.shape == loaded_weight.shape
             param_data.copy_(loaded_weight)
 
-    opt_test = torch.compile(weight_loader)
-    print(opt_test(torch.randn(10, 10), torch.randn(10, 10)))
-
-    
         ###########################################################################
         # # 使用 no_grad 来避免不必要的梯度跟踪
         # with torch.no_grad():
