@@ -98,7 +98,8 @@ class RMSNorm(nn.Module):
         num_elements = x.numel()
         # 使用 Triton 内核进行 RMSNorm
         out = torch.empty_like(x)
-        rms_norm_kernel[(num_elements + 255) // 256](x, self.weight.data, self.variance_epsilon, out, residual, num_elements)
+        grid = (num_elements + 255) // 256
+        rms_norm_kernel[grid](x, self.weight.data, self.variance_epsilon, out, residual, num_elements)
         if residual is not None:
             out += residual.to(out.dtype)
         return out
