@@ -285,7 +285,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                          skip_bias_add, params_dtype, linear_method)
         self.use_llama_nn = os.environ.get('LLAMA_NN') == '1'
 
-
     def weight_loader(self,
                       param: Parameter,
                       loaded_weight: torch.Tensor,
@@ -364,10 +363,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             assert param_data.shape == loaded_weight.shape
             param_data.copy_(loaded_weight)
 
-    opt_test = torch.compile(weight_loader)
-    print(opt_test(torch.randn(10, 10), torch.randn(10, 10)))
-
-    
         ###########################################################################
         # # 使用 no_grad 来避免不必要的梯度跟踪
         # with torch.no_grad():
