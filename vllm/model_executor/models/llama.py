@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 from torch import nn
 from transformers import LlamaConfig
-
+from vllm.logger import init_logger
 from vllm.config import LoRAConfig
 from vllm.model_executor.input_metadata import InputMetadata
 from vllm.model_executor.layers.activation import SiluAndMul
@@ -49,7 +49,7 @@ from vllm.sequence import SamplerOutput
 
 KVCache = Tuple[torch.Tensor, torch.Tensor]
 
-
+logger = init_logger(__name__)
 class LlamaMLP(nn.Module):
 
     def __init__(
@@ -360,17 +360,31 @@ class LlamaForCausalLM(nn.Module):
             ("gate_up_proj", "gate_proj", 0),
             ("gate_up_proj", "up_proj", 1),
         ]
+        logger.info("change stacked mapping become a dictionary\n")
+        # stacked_params_mapping = {
+        #     "q_proj": ("qkv_proj", "q"),
+        #     "k_proj": ("qkv_proj", "k"),
+        #     "v_proj": ("qkv_proj", "v"),
+        #     "gate_proj": ("gate_up_proj", 0),
+        #     "up_proj": ("gate_up_proj", 1),
+        # }
+        logger.info("I CHANGED THE WAY TO LOAD\n")
         params_dict = dict(self.named_parameters())
+        loop_count = 0
         for name, loaded_weight in hf_model_weights_iterator(
                 model_name_or_path, cache_dir, load_format, revision):
-            if "rotary_emb.inv_freq" in name:
-                continue
-            if ("rotary_emb.cos_cached" in name
-                    or "rotary_emb.sin_cached" in name):
-                # Models trained using ColossalAI may include these tensors in
-                # the checkpoint. Skip them.
-                continue
+            # if "rotary_emb.inv_freq" in name:
+            #     continue
+            # if ("rotary_emb.cos_cached" in name
+            #         or "rotary_emb.sin_cached" in name):
+            #     # Models trained using ColossalAI may include these tensors in
+            #     # the checkpoint. Skip them.
+            #     continue
+            logger.info("change the switch")
+            if "rotary_emb.inv_freq" in name or ("rotary_emb.cos_cached" in name or "rotary_emb.sin_cached" in name):
+                    continue
             for (param_name, weight_name, shard_id) in stacked_params_mapping:
+                loop_count += 1
                 if weight_name not in name:
                     continue
                 name = name.replace(weight_name, param_name)
@@ -389,3 +403,4 @@ class LlamaForCausalLM(nn.Module):
                 weight_loader = getattr(param, "weight_loader",
                                         default_weight_loader)
                 weight_loader(param, loaded_weight)
+        logger.info(f"循环执行了 {loop_count} 次")

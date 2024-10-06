@@ -9,8 +9,8 @@ from vllm.engine.llm_engine import LLMEngine
 from vllm.outputs import RequestOutput
 from vllm.sampling_params import SamplingParams
 from vllm.utils import Counter
-
-
+from vllm.logger import init_logger
+logger = init_logger(__name__)
 class LLM:
     """An LLM for generating texts from given prompts and sampling parameters.
 
@@ -108,6 +108,7 @@ class LLM:
         )
         self.llm_engine = LLMEngine.from_engine_args(engine_args)
         self.request_counter = Counter()
+        logger.info("\n\nlook here \n\n")
 
     def get_tokenizer(
             self) -> Union[PreTrainedTokenizer, PreTrainedTokenizerFast]:

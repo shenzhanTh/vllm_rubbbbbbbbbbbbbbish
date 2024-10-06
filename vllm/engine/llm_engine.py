@@ -95,7 +95,7 @@ class LLMEngine:
         self.log_stats = log_stats
         self._verify_args()
 			#logger.debug(f"Config: model_config={model_config}, cache_config={cache_config}")
-        logger.info(f"Config: model_config={model_config}, cache_config={cache_config}\n\n")
+        logger.info(f"1\n2\n3\n4\nConfig heiheihie: model_config={model_config}, cache_config={cache_config}\n\n")
         self._init_tokenizer()
         self.seq_counter = Counter()
 
@@ -368,7 +368,7 @@ class LLMEngine:
         
         engine_configs = engine_args.create_engine_configs()
         parallel_config = engine_configs[2]
-        logger.info("Initializing engine ", parallel_config=parallel_configllel_config)
+        # logger.info("\n\nInitializing engine \n\n", parallel_config=parallel_configllel_config)
         # Initialize the cluster.
         placement_group = initialize_cluster(parallel_config)
         # Create the LLM engine.
@@ -1040,8 +1040,8 @@ class LLMEngine:
             # ----------------------END-----------------------
             # 定义批次大小
             
-            batch_size = 32  # 可以根据实际情况调整
-            logger.inf("Batch size: {}".format(batch_size))
+            batch_size = 8  # 可以根据实际情况调整
+            logger.info("Batch size: {}".format(batch_size))
             # 用于存储所有批次的结果
             ray_worker_outputs = []
 
