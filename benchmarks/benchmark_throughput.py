@@ -347,4 +347,9 @@ with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], with_stac
                                 "backend.")
         main(args)
 
-logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+# logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+# 将结果输出到 message.txt 文件
+with open("message.txt", "w") as f:
+    f.write(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+
+logger.info("Profiling results 保存 to message.txt")
