@@ -16,6 +16,8 @@ from vllm.logger import init_logger
 
 # 确保目录存在
 import os
+output_file_path = "/benchmarks/message.txt"  # 指定输出文件路径
+
 os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
 
 logger = init_logger(__name__)
@@ -354,7 +356,6 @@ with profile(activities=[ProfilerActivity.CPU], with_stack=True) as prof:#######
 # logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
 # 将结果输出到 message.txt 文件
 
-output_file_path = "/benchmarks/message.txt"  # 指定输出文件路径
 with open(output_file_path, "w") as f:
     f.write(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
 
