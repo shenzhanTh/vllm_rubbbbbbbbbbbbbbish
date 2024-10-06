@@ -46,10 +46,29 @@ from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.model_executor.weight_utils import (default_weight_loader,
                                               hf_model_weights_iterator)
 from vllm.sequence import SamplerOutput
+import triton
+import triton.language as tl
+import math
 
 KVCache = Tuple[torch.Tensor, torch.Tensor]
 
 logger = init_logger(__name__)
+#新增部分
+@triton.jit
+def weight_loader_kernel(param_ptr, loaded_weight_ptr, num_weights):
+    # param_ptr 和 loaded_weight_ptr 是指向数据的指针
+    # num_weights 是要加载的权重数量
+    # 这里可以用 thread_id 来处理多个线程的并行执行
+    pid = tl.program_id(0)
+    # 计算每个线程要处理的权重
+    weight_idx = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+
+    # 执行加载操作
+    for i in weight_idx:
+        if i < num_weights:
+            param = tl.load(param_ptr + i)  # 加载参数
+            loaded_weight = tl.load(loaded_weight_ptr + i)  # 加载权重
+            param.copy_(loaded_weight)  # 拷贝权重
 class LlamaMLP(nn.Module):
 
     def __init__(
@@ -353,25 +372,26 @@ class LlamaForCausalLM(nn.Module):
                      cache_dir: Optional[str] = None,
                      load_format: str = "auto",
                      revision: Optional[str] = None):
-        stacked_params_mapping = [
-            # (param_name, shard_name, shard_id)
-            ("qkv_proj", "q_proj", "q"),
-            ("qkv_proj", "k_proj", "k"),
-            ("qkv_proj", "v_proj", "v"),
-            ("gate_up_proj", "gate_proj", 0),
-            ("gate_up_proj", "up_proj", 1),
-        ]
+        # stacked_params_mapping = [
+        #     # (param_name, shard_name, shard_id)
+        #     ("qkv_proj", "q_proj", "q"),
+        #     ("qkv_proj", "k_proj", "k"),
+        #     ("qkv_proj", "v_proj", "v"),
+        #     ("gate_up_proj", "gate_proj", 0),
+        #     ("gate_up_proj", "up_proj", 1),
+        # ]
         logger.info("change stacked mapping become a dictionary\n")
-        # stacked_params_mapping = {
-        #     "q_proj": ("qkv_proj", "q"),
-        #     "k_proj": ("qkv_proj", "k"),
-        #     "v_proj": ("qkv_proj", "v"),
-        #     "gate_proj": ("gate_up_proj", 0),
-        #     "up_proj": ("gate_up_proj", 1),
-        # }
+        stacked_params_mapping = {
+            "q_proj": ("qkv_proj", "q"),
+            "k_proj": ("qkv_proj", "k"),
+            "v_proj": ("qkv_proj", "v"),
+            "gate_proj": ("gate_up_proj", 0),
+            "up_proj": ("gate_up_proj", 1),
+        }
         logger.info("I CHANGED THE WAY TO LOAD\n")
         params_dict = dict(self.named_parameters())
-        loop_count = 0
+        # loop_count = 0
+        weight_load_tasks = []#加载权重的任务
         for name, loaded_weight in hf_model_weights_iterator(
                 model_name_or_path, cache_dir, load_format, revision):
             # if "rotary_emb.inv_freq" in name:
@@ -381,27 +401,36 @@ class LlamaForCausalLM(nn.Module):
             #     # Models trained using ColossalAI may include these tensors in
             #     # the checkpoint. Skip them.
             #     continue
-            logger.info("change the switch")
+            # logger.info("change the switch")
             if "rotary_emb.inv_freq" in name or ("rotary_emb.cos_cached" in name or "rotary_emb.sin_cached" in name):
                     continue
-            for (param_name, weight_name, shard_id) in stacked_params_mapping:
-                loop_count += 1
+            for param_name, (weight_name, shard_id) in stacked_params_mapping.items():
+                # loop_count += 1,loop_count==1134
                 if weight_name not in name:
+                    continue
+                if name.endswith(".bias") and name not in params_dict:
                     continue
                 name = name.replace(weight_name, param_name)
                 # Skip loading extra bias for GPTQ models.
-                if name.endswith(".bias") and name not in params_dict:
-                    continue
-                param = params_dict[name]
-                weight_loader = param.weight_loader
-                weight_loader(param, loaded_weight, shard_id)
-                break
-            else:
-                # Skip loading extra bias for GPTQ models.
-                if name.endswith(".bias") and name not in params_dict:
-                    continue
-                param = params_dict[name]
-                weight_loader = getattr(param, "weight_loader",
-                                        default_weight_loader)
-                weight_loader(param, loaded_weight)
-        logger.info(f"循环执行了 {loop_count} 次")
+                param = params_dict.get(name)
+                if param is not None:
+                    weight_load_tasks.append((param, loaded_weight, shard_id))
+                    break
+            total_elements = loaded_weight.numel()
+            BLOCK_SIZE = 64
+            num_blocks = math.ceil(total_elements / BLOCK_SIZE)
+            if len(weight_load_tasks) > 0:
+                weight_loader_kernel[(num_blocks, BLOCK_SIZE)](param.data_ptr(), loaded_weight.data_ptr(), len(weight_load_tasks))
+                #尝试利用trition优化加载
+            #     weight_loader = param.weight_loader
+            #     weight_loader(param, loaded_weight, shard_id)
+            #     break
+            # else:
+            #     # Skip loading extra bias for GPTQ models.
+            #     if name.endswith(".bias") and name not in params_dict:
+            #         continue
+            #     param = params_dict[name]
+            #     weight_loader = getattr(param, "weight_loader",
+            #                             default_weight_loader)
+            #     weight_loader(param, loaded_weight)
+        # logger.info(f"循环执行了 {loop_count} 次")
