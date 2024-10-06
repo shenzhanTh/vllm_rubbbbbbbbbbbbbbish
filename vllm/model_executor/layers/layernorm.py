@@ -16,13 +16,14 @@ def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements):
 
     # 使用掩码避免越界
     mask = idx < num_elements
-    
+
     # 计算均值和方差
     sum_square = tl.zeros((1,), dtype=tl.float32)
     for i in range(block_size):
         if mask[i]:
             sum_square += x[idx[i]] ** 2
 
+    sum_square = tl.sum(sum_square)  # 聚合所有块的平方和
     mean_square = sum_square / num_elements
     variance = mean_square + epsilon
     scale = tl.rsqrt(variance)
@@ -97,7 +98,7 @@ class RMSNorm(nn.Module):
         num_elements = x.numel()
         # 使用 Triton 内核进行 RMSNorm
         out = torch.empty_like(x)
-        rms_norm_kernel[(num_elements + 255) // 256](x, self.weight.data, self.variance_epsilon, out, num_elements)
+         rms_norm_kernel[(num_elements + 255) // 256](x, self.weight.data, self.variance_epsilon, out, residual, num_elements)
         if residual is not None:
             out += residual.to(out.dtype)
         return out
