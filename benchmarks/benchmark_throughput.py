@@ -14,12 +14,6 @@ from torch.profiler import profile, ProfilerActivity
 
 from vllm.logger import init_logger
 
-# 确保目录存在
-import os
-output_file_path = "/benchmarks/message.txt"  # 指定输出文件路径
-
-os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
-
 logger = init_logger(__name__)
 
 def sample_requests(
@@ -356,10 +350,10 @@ with profile(activities=[ProfilerActivity.CPU], with_stack=True) as prof:#######
 # logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
 # 将结果输出到 message.txt 文件
 
-with open(output_file_path, "w") as f:
+with open("message.txt", "w") as f:
     f.write(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
 
 
 prof.export_chrome_trace("trace.json")
 
-logger.info(f"Profiling results 保存 to {output_file_path}  同时trace.json已经生成")
+logger.info(f"Profiling results 保存 to meaaage.txt  同时trace.json已经生成")
