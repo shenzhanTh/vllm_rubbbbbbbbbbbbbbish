@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 from torch import nn
 from transformers import LlamaConfig
-
+from vllm.logger import init_logger
 from vllm.config import LoRAConfig
 from vllm.model_executor.input_metadata import InputMetadata
 from vllm.model_executor.layers.activation import SiluAndMul
@@ -49,7 +49,7 @@ from vllm.sequence import SamplerOutput
 
 KVCache = Tuple[torch.Tensor, torch.Tensor]
 
-
+logger = init_logger(__name__)
 class LlamaMLP(nn.Module):
 
     def __init__(
