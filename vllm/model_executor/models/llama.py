@@ -216,7 +216,7 @@ class LlamaDecoderLayer(nn.Module):
                                        eps=config.rms_norm_eps)
         self.post_attention_layernorm = RMSNorm(config.hidden_size,
                                                 eps=config.rms_norm_eps)
-    
+    #now 10.8s 占比 14.03%，准备优化
     def forward(
         self,
         positions: torch.Tensor,
