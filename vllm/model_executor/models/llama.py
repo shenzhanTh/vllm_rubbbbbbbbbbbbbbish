@@ -69,6 +69,44 @@ def weight_loader_kernel(param_ptr, loaded_weight_ptr, num_weights):
             param = tl.load(param_ptr + i)  # 加载参数
             loaded_weight = tl.load(loaded_weight_ptr + i)  # 加载权重
             param.copy_(loaded_weight)  # 拷贝权重
+# @triton.jit
+# def self_attention_kernel(
+#     positions, hidden_states, kv_cache, input_metadata,
+#     output, num_heads, head_dim, num_elements, 
+#     **meta):
+    
+#     pid = tl.program_id(0)
+#     block_size = tl.block_size
+#     idx = pid * block_size + tl.arange(0, block_size)
+    
+#     # 使用掩码避免越界
+#     mask = idx < num_elements
+    
+#     # 自注意力计算示例
+#     # 这里简单地实现点乘，你可以根据具体需求进行调整
+#     for head in range(num_heads):
+#         start = head * head_dim
+#         query = hidden_states[idx, start:start + head_dim]
+#         key = hidden_states[idx, start:start + head_dim]  # 根据你的逻辑调整
+#         value = hidden_states[idx, start:start + head_dim]  # 根据你的逻辑调整
+        
+#         # 点乘注意力计算（可替换为更复杂的逻辑）
+#         attention_scores = tl.dot(query, key.T)
+#         attention_weights = tl.softmax(attention_scores)
+#         output[idx] += tl.dot(attention_weights, value)
+
+# @triton.jit
+# def mlp_kernel(hidden_states, output, num_elements):
+#     pid = tl.program_id(0)
+#     block_size = tl.block_size
+#     idx = pid * block_size + tl.arange(0, block_size)
+
+#     # 使用掩码避免越界
+#     mask = idx < num_elements
+    
+#     # MLP 计算示例（简单的线性变换）
+#     weight = tl.load(hidden_states)  # 假设 hidden_states 是权重矩阵
+#     output[idx] = tl.dot(weight[idx], weight.T)
 class LlamaMLP(nn.Module):
 
     def __init__(
