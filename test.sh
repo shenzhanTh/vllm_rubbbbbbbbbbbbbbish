@@ -1,4 +1,11 @@
- salloc -N 1 -n 8 --gres=dcu:1 -J tess -t 1-0 -p wzidnormal
+#!/bin/bash
+#SBATCH -J test
+#SBATCH -p wzidnormal
+#SBATCH -N 1
+#SBATCH -n 8
+#SBATCH --gres=dcu:1
+#SBATCH -t 1-0
+salloc -N 1 -n 8 --gres=dcu:1 -J tess -t 1-0 -p wzidnormal
 ssh xdb2
 conda activate llama333
 module rm compiler/dtk/21.10 
