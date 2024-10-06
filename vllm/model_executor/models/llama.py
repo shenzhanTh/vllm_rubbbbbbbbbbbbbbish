@@ -163,7 +163,7 @@ class LlamaAttention(nn.Module):
                                    self.scaling,
                                    num_kv_heads=self.num_kv_heads,
                                    sliding_window=sliding_window)
-    @torch.compile
+    
     def forward(
         self,
         positions: torch.Tensor,
@@ -216,7 +216,7 @@ class LlamaDecoderLayer(nn.Module):
                                        eps=config.rms_norm_eps)
         self.post_attention_layernorm = RMSNorm(config.hidden_size,
                                                 eps=config.rms_norm_eps)
-    @torch.compile
+    
     def forward(
         self,
         positions: torch.Tensor,
@@ -272,7 +272,7 @@ class LlamaModel(nn.Module):
         ])
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         
-    @torch.compile
+    
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -346,7 +346,7 @@ class LlamaForCausalLM(nn.Module):
             if not lora_config else lora_config.lora_vocab_padding_size,
         )
         self.sampler = Sampler(self.unpadded_vocab_size, config.vocab_size)
-    @torch.compile
+    
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -357,7 +357,7 @@ class LlamaForCausalLM(nn.Module):
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    input_metadata)
         return hidden_states
-    @torch.compile
+    
     def sample(
         self,
         hidden_states: torch.Tensor,
