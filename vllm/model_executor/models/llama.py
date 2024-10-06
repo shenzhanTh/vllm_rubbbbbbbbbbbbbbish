@@ -46,10 +46,29 @@ from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.model_executor.weight_utils import (default_weight_loader,
                                               hf_model_weights_iterator)
 from vllm.sequence import SamplerOutput
+import triton
+import triton.language as tl
+import math
 
 KVCache = Tuple[torch.Tensor, torch.Tensor]
 
 logger = init_logger(__name__)
+#新增部分
+@triton.jit
+def weight_loader_kernel(param_ptr, loaded_weight_ptr, num_weights):
+    # param_ptr 和 loaded_weight_ptr 是指向数据的指针
+    # num_weights 是要加载的权重数量
+    # 这里可以用 thread_id 来处理多个线程的并行执行
+    pid = tl.program_id(0)
+    # 计算每个线程要处理的权重
+    weight_idx = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+
+    # 执行加载操作
+    for i in weight_idx:
+        if i < num_weights:
+            param = tl.load(param_ptr + i)  # 加载参数
+            loaded_weight = tl.load(loaded_weight_ptr + i)  # 加载权重
+            param.copy_(loaded_weight)  # 拷贝权重
 class LlamaMLP(nn.Module):
 
     def __init__(
@@ -371,6 +390,7 @@ class LlamaForCausalLM(nn.Module):
         logger.info("I CHANGED THE WAY TO LOAD\n")
         params_dict = dict(self.named_parameters())
         # loop_count = 0
+        weight_load_tasks = []#加载权重的任务
         for name, loaded_weight in hf_model_weights_iterator(
                 model_name_or_path, cache_dir, load_format, revision):
             # if "rotary_emb.inv_freq" in name:
@@ -391,17 +411,24 @@ class LlamaForCausalLM(nn.Module):
                 # Skip loading extra bias for GPTQ models.
                 if name.endswith(".bias") and name not in params_dict:
                     continue
-                param = params_dict[name]
+                if param is not None:
+                    weight_load_tasks.append((param, loaded_weight, shard_id))
+                    break
+            total_elements = loaded_weight.numel()
+            BLOCK_SIZE = 64
+            num_blocks = math.ceil(total_elements / BLOCK_SIZE)
+            if len(weight_load_tasks) > 0:
+                weight_loader_kernel[(num_blocks, BLOCK_SIZE)](param.data_ptr(), loaded_weight.data_ptr(), len(weight_load_tasks))
                 #尝试利用trition优化加载
-                weight_loader = param.weight_loader
-                weight_loader(param, loaded_weight, shard_id)
-                break
-            else:
-                # Skip loading extra bias for GPTQ models.
-                if name.endswith(".bias") and name not in params_dict:
-                    continue
-                param = params_dict[name]
-                weight_loader = getattr(param, "weight_loader",
-                                        default_weight_loader)
-                weight_loader(param, loaded_weight)
+            #     weight_loader = param.weight_loader
+            #     weight_loader(param, loaded_weight, shard_id)
+            #     break
+            # else:
+            #     # Skip loading extra bias for GPTQ models.
+            #     if name.endswith(".bias") and name not in params_dict:
+            #         continue
+            #     param = params_dict[name]
+            #     weight_loader = getattr(param, "weight_loader",
+            #                             default_weight_loader)
+            #     weight_loader(param, loaded_weight)
         # logger.info(f"循环执行了 {loop_count} 次")
