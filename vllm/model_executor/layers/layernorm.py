@@ -12,7 +12,7 @@ import triton.language as tl
 def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements):
     pid = tl.program_id(0)
     block_size = 64
-    idx = pid * block_size + tl.arange(0, block_size)
+    idx = pid * block_size + tl.arange(0, block_size, dtype=tl.int32)
 
     # 使用掩码避免越界
     mask = idx < num_elements
@@ -26,7 +26,7 @@ def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements):
     sum_square = tl.sum(sum_square)  # 聚合所有块的平方和
     mean_square = sum_square / num_elements
     variance = mean_square + epsilon
-    scale = tl.pow(variance, -0.5)
+    scale = 1/(variance**0.5)
 
     # 应用 RMSNorm
     for i in range(block_size):
