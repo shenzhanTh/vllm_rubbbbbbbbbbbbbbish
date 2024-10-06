@@ -10,7 +10,7 @@ source /public/software/apps/anaconda3/5.2.0/bin/activate
 conda activate llama333
 module rm compiler/dtk/21.10
 module load compiler/dtk/24.04
-export LOG_LEVEL=DEBUGs
+export LOG_LEVEL=DEBUG
 export LD_LIBRARY_PATH=/work/home/xdb4_60320/xdb-www/das1.0/das1_0/rocblas-install/lib:$LD_LIBRARY_PATH
 python /work/home/xdb4_60320/xdb-www/das1.0/das1_0/vllm/setup.py install
-HIP_VISIBLE_DEVICES=0 python /work/home/xdb4_60320/xdb-www/das1.0/das1_0/vllm/benchmarks/benchmark_throughput.py --enforce-eager -tp 1 --num-prompts 8 --model /work/models/Meta-Llama-3-8B/ --dtype float16 --trust-remote-code --input-len 8 --output-len 8
+HIP_VISIBLE_DEVICES=0 python /work/home/xdb4_60320/xdb-www/das1.0/das1_0/vllm/benchmarks/benchmark_throughput.py --num-prompts 32 --model /work/models/Meta-Llama-3-8B --dataset /work/models/data/ShareGPT_V3_unfiltered_cleaned_split.json --trust-remote-code  --enforce-eager --dtype float16
