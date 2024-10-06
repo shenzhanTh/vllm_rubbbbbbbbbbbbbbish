@@ -116,7 +116,7 @@ class LLM:
         """Run the LLM engine to process requests in batches."""
         outputs = []
         pbar = None
-
+        logger.info("some thing happened in llm.py")
         if use_tqdm:
             num_requests = self.llm_engine.get_num_unfinished_requests()
             pbar = tqdm(total=num_requests, desc="Processed prompts")
