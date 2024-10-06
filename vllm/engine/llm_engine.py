@@ -368,7 +368,7 @@ class LLMEngine:
         
         engine_configs = engine_args.create_engine_configs()
         parallel_config = engine_configs[2]
-        logger.info("\n\nInitializing engine \n\n", parallel_config=parallel_configllel_config)
+        # logger.info("\n\nInitializing engine \n\n", parallel_config=parallel_configllel_config)
         # Initialize the cluster.
         placement_group = initialize_cluster(parallel_config)
         # Create the LLM engine.
