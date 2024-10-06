@@ -365,7 +365,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             param_data.copy_(loaded_weight)
 
     opt_test = torch.compile(weight_loader)
-    print(opt_test(torch.randn(10, 10), torch.randn(10, 10)))
+    # print(opt_test(torch.randn(10, 10), torch.randn(10, 10)))
 
     
         ###########################################################################
