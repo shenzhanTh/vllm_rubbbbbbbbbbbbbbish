@@ -352,25 +352,25 @@ class LlamaForCausalLM(nn.Module):
                      cache_dir: Optional[str] = None,
                      load_format: str = "auto",
                      revision: Optional[str] = None):
-        stacked_params_mapping = [
-            # (param_name, shard_name, shard_id)
-            ("qkv_proj", "q_proj", "q"),
-            ("qkv_proj", "k_proj", "k"),
-            ("qkv_proj", "v_proj", "v"),
-            ("gate_up_proj", "gate_proj", 0),
-            ("gate_up_proj", "up_proj", 1),
-        ]
+        # stacked_params_mapping = [
+        #     # (param_name, shard_name, shard_id)
+        #     ("qkv_proj", "q_proj", "q"),
+        #     ("qkv_proj", "k_proj", "k"),
+        #     ("qkv_proj", "v_proj", "v"),
+        #     ("gate_up_proj", "gate_proj", 0),
+        #     ("gate_up_proj", "up_proj", 1),
+        # ]
         logger.info("change stacked mapping become a dictionary\n")
-        # stacked_params_mapping = {
-        #     "q_proj": ("qkv_proj", "q"),
-        #     "k_proj": ("qkv_proj", "k"),
-        #     "v_proj": ("qkv_proj", "v"),
-        #     "gate_proj": ("gate_up_proj", 0),
-        #     "up_proj": ("gate_up_proj", 1),
-        # }
+        stacked_params_mapping = {
+            "q_proj": ("qkv_proj", "q"),
+            "k_proj": ("qkv_proj", "k"),
+            "v_proj": ("qkv_proj", "v"),
+            "gate_proj": ("gate_up_proj", 0),
+            "up_proj": ("gate_up_proj", 1),
+        }
         logger.info("I CHANGED THE WAY TO LOAD\n")
         params_dict = dict(self.named_parameters())
-        loop_count = 0
+        # loop_count = 0
         for name, loaded_weight in hf_model_weights_iterator(
                 model_name_or_path, cache_dir, load_format, revision):
             # if "rotary_emb.inv_freq" in name:
@@ -380,11 +380,11 @@ class LlamaForCausalLM(nn.Module):
             #     # Models trained using ColossalAI may include these tensors in
             #     # the checkpoint. Skip them.
             #     continue
-            logger.info("change the switch")
+            # logger.info("change the switch")
             if "rotary_emb.inv_freq" in name or ("rotary_emb.cos_cached" in name or "rotary_emb.sin_cached" in name):
                     continue
-            for (param_name, weight_name, shard_id) in stacked_params_mapping:
-                loop_count += 1
+            for (param_name, weight_name, shard_id) in stacked_params_mapping.item():
+                # loop_count += 1,loop_count==1134
                 if weight_name not in name:
                     continue
                 name = name.replace(weight_name, param_name)
@@ -392,6 +392,7 @@ class LlamaForCausalLM(nn.Module):
                 if name.endswith(".bias") and name not in params_dict:
                     continue
                 param = params_dict[name]
+                #尝试利用trition优化加载
                 weight_loader = param.weight_loader
                 weight_loader(param, loaded_weight, shard_id)
                 break
@@ -403,4 +404,4 @@ class LlamaForCausalLM(nn.Module):
                 weight_loader = getattr(param, "weight_loader",
                                         default_weight_loader)
                 weight_loader(param, loaded_weight)
-        logger.info(f"循环执行了 {loop_count} 次")
+        # logger.info(f"循环执行了 {loop_count} 次")
