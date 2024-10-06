@@ -5,8 +5,39 @@ import torch
 import torch.nn as nn
 
 from vllm._C import ops
+import triton
+import triton.language as tl
 
+@triton.jit
+def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements):
+    pid = tl.program_id(0)
+    block_size = tl.block_size
+    idx = pid * block_size + tl.arange(0, block_size)
 
+    # 使用掩码避免越界
+    mask = idx < num_elements
+    
+    # 计算均值和方差
+    sum_square = tl.zeros((1,), dtype=tl.float32)
+    for i in range(block_size):
+        if mask[i]:
+            sum_square += x[idx[i]] ** 2
+
+    mean_square = sum_square / num_elements
+    variance = mean_square + epsilon
+    scale = tl.rsqrt(variance)
+
+    # 应用 RMSNorm
+    for i in range(block_size):
+        if mask[i]:
+            normed_value = x[idx[i]] * scale
+            output[idx[i]] = normed_value * weight
+
+    # 添加残差
+    if residual is not None:
+        for i in range(block_size):
+            if mask[i]:
+                output[idx[i]] += residual[idx[i]]
 class RMSNorm(nn.Module):
     """Root mean square normalization.
 
@@ -48,19 +79,25 @@ class RMSNorm(nn.Module):
         x: torch.Tensor,
         residual: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        if residual is not None:
-            ops.fused_add_rms_norm(
-                x,
-                residual,
-                self.weight.data,
-                self.variance_epsilon,
-            )
-            return x, residual
+        # if residual is not None:
+        #     ops.fused_add_rms_norm(
+        #         x,
+        #         residual,
+        #         self.weight.data,
+        #         self.variance_epsilon,
+        #     )
+        #     return x, residual
+        # out = torch.empty_like(x)
+        # ops.rms_norm(
+        #     out,
+        #     x,
+        #     self.weight.data,
+        #     self.variance_epsilon,
+        # )
+        num_elements = x.numel()
+        # 使用 Triton 内核进行 RMSNorm
         out = torch.empty_like(x)
-        ops.rms_norm(
-            out,
-            x,
-            self.weight.data,
-            self.variance_epsilon,
-        )
+        rms_norm_kernel[(num_elements + 255) // 256](x, self.weight.data, self.variance_epsilon, out, num_elements)
+        if residual is not None:
+            out += residual.to(out.dtype)
         return out
