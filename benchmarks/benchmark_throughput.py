@@ -197,7 +197,7 @@ def run_mii(
     end = time.perf_counter()
     return end - start
 
-with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], with_stack=True) as prof:#######toch.profiler
+with profile(activities=[ProfilerActivity.CPU], with_stack=True) as prof:#######toch.profiler
     def main(args: argparse.Namespace):
         print(args)
         random.seed(args.seed)
