@@ -1041,6 +1041,7 @@ class LLMEngine:
             # 定义批次大小
             
             batch_size = 32  # 可以根据实际情况调整
+            logger.info("max_concurrent_workers: {}".format(max_concurrent_workers))
             logger.info("Batch size: {}".format(batch_size))
             # 用于存储所有批次的结果
             ray_worker_outputs = []
