@@ -217,7 +217,7 @@ class ColumnParallelLinear(torch.nn.Module):
             self.register_parameter("bias", None)
         self.use_llama_nn = os.environ.get('LLAMA_NN') == '1'
 
-    @torch.compile
+    @torch.compile #######编译优化
     def weight_loader(self, param: Parameter, loaded_weight: torch.Tensor):
         tp_rank = get_tensor_model_parallel_rank()
         output_dim = getattr(param, "output_dim", None)
@@ -233,6 +233,7 @@ class ColumnParallelLinear(torch.nn.Module):
             loaded_weight = loaded_weight.reshape(param_data.shape[0],-1)
         param_data.copy_(loaded_weight)
 
+    @torch.compile #######编译优化
     def forward(self, input_):
         bias = self.bias if not self.skip_bias_add else None
 
@@ -530,6 +531,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                          params_dtype, linear_method)
         self.use_llama_nn = os.environ.get('LLAMA_NN') == '1'
 
+    @torch.compile #######编译优化
     def weight_loader(self,
                       param: Parameter,
                       loaded_weight: torch.Tensor,
@@ -706,6 +708,7 @@ class RowParallelLinear(torch.nn.Module):
             self.register_parameter("bias", None)
         self.use_llama_nn = os.environ.get('LLAMA_NN') == '1'
 
+    @torch.compile #######编译优化
     def weight_loader(self, param: Parameter, loaded_weight: torch.Tensor):
         tp_rank = get_tensor_model_parallel_rank()
         input_dim = getattr(param, "input_dim", None)
@@ -720,7 +723,8 @@ class RowParallelLinear(torch.nn.Module):
             loaded_weight = loaded_weight.transpose(0, 1)
             loaded_weight=loaded_weight.reshape(param_data.shape[0],-1)
         param_data.copy_(loaded_weight)
-
+    
+    @torch.compile #######编译优化
     def forward(self, input_):
         # Set up backprop all-reduce. ####检查输入是否已经被并行化
         if self.input_is_parallel:
