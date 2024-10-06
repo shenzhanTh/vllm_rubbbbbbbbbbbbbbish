@@ -21,8 +21,8 @@ class EngineArgs:
     seed: int = 0
     max_model_len: Optional[int] = None
     worker_use_ray: bool = False
-    pipeline_parallel_size: int = 4
-    tensor_parallel_size: int = 4
+    pipeline_parallel_size: int = 0
+    tensor_parallel_size: int = 0
     max_parallel_loading_workers: Optional[int] = None
     block_size: int = 16
     swap_space: int = 4  # GiB
