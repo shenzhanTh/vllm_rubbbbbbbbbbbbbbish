@@ -26,7 +26,7 @@ def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements):
     sum_square = tl.sum(sum_square)  # 聚合所有块的平方和
     mean_square = sum_square / num_elements
     variance = mean_square + epsilon
-    scale = tl.rsqrt(variance)
+    scale = tl.pow(variance, -0.5)
 
     # 应用 RMSNorm
     for i in range(block_size):
