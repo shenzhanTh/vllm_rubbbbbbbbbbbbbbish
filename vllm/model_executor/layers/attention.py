@@ -186,26 +186,40 @@ class PagedAttention(nn.Module):
 
                 # TODO(woosuk): Too many view operations. Let's try to reduce
                 # them in the future for code readability.
-                if self.alibi_slopes is None:
-                    query = query.unsqueeze(0)
-                    key = key.unsqueeze(0)
-                    value = value.unsqueeze(0)
-                else:
-                    query = query.unflatten(0, (batch_size, seq_len))
-                    key = key.unflatten(0, (batch_size, seq_len))
-                    value = value.unflatten(0, (batch_size, seq_len))
+                ##############################################
 
-                out = xops.memory_efficient_attention_forward(
-                    query,
-                    key,
-                    value,
-                    attn_bias=input_metadata.attn_bias,
-                    p=0.0,
-                    scale=self.scale,
-                    op=xops.fmha.MemoryEfficientAttentionFlashAttentionOp[0] if
-                    (is_hip()) else None,
-                )
+                ##减少不必要的 view 操作
+                query = query.unsqueeze(0) if self.alibi_slopes is None else query.unflatten(0, (batch_size, seq_len))
+                key = key.unsqueeze(0) if self.alibi_slopes is None else key.unflatten(0, (batch_size, seq_len))
+                value = value.unsqueeze(0) if self.alibi_slopes is None else value.unflatten(0, (batch_size, seq_len))
+
+                out = xops.memory_efficient_attention_forward(query, key, value,
+                                                             attn_bias=input_metadata.attn_bias,
+                                                             p=0.0, scale=self.scale,
+                                                             op=xops.fmha.MemoryEfficientAttentionFlashAttentionOp[0] if (is_hip()) else None)
                 output = out.view_as(query)
+
+                ##############################################
+                # if self.alibi_slopes is None:
+                #     query = query.unsqueeze(0)
+                #     key = key.unsqueeze(0)
+                #     value = value.unsqueeze(0)
+                # else:
+                #     query = query.unflatten(0, (batch_size, seq_len))
+                #     key = key.unflatten(0, (batch_size, seq_len))
+                #     value = value.unflatten(0, (batch_size, seq_len))
+
+                # out = xops.memory_efficient_attention_forward(
+                #     query,
+                #     key,
+                #     value,
+                #     attn_bias=input_metadata.attn_bias,
+                #     p=0.0,
+                #     scale=self.scale,
+                #     op=xops.fmha.MemoryEfficientAttentionFlashAttentionOp[0] if
+                #     (is_hip()) else None,
+                # )
+                # output = out.view_as(query)
             else:
                 # prefix-enabled attention
                 output = torch.empty_like(query)
