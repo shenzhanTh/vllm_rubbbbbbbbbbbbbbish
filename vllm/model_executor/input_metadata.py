@@ -1,4 +1,5 @@
-from typing import Optional
+from dataclasses import dataclass, fields
+from typing import Optional, Any, Dict
 
 import torch
 
@@ -52,3 +53,12 @@ class InputMetadata:
                 f"block_tables={self.block_tables}, "
                 f"use_cuda_graph={self.use_cuda_graph}, "
                 f"kv_cache_dtype={self.kv_cache_dtype})")
+    
+    def asdict_zerocopy(self) -> Dict[str, Any]:
+        """Similar to dataclasses.asdict, but avoids deepcopying."""
+        # Note that if we add dataclasses as fields, they will need
+        # similar handling.
+        return {
+            field.name: getattr(self, field.name)
+            for field in fields(self)
+        }
