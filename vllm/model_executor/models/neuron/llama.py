@@ -23,12 +23,13 @@ class LlamaForCausalLM(nn.Module):
         self.model = None
         self.sampler = Sampler(config.vocab_size)
         self.seq_ids_cache = None  # 预分配 seq_ids 缓存
-        logger.info("some thing happen here")
+        
 
     def forward(self, input_ids: torch.Tensor, positions: torch.Tensor,
                 kv_caches: List[KVCache], input_metadata: InputMetadata) -> torch.Tensor:
         # 使用 torch.no_grad() 优化推理性能，避免梯度计算
         with torch.no_grad():  
+            logger.info("some thing happen here")
             block_size = self.model.context_buckets[-1]
             if input_metadata.is_prompt:
                 if self.seq_ids_cache is None:
