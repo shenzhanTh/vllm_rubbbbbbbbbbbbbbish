@@ -81,7 +81,7 @@ class UnquantizedLinearMethod(LinearMethodBase):
             return F.linear(x, weight)
         
         if self.use_llama_nn:
-            ###weight = weight.reshape(weight.shape[1], -1) 去掉权重重塑
+            weight = weight.reshape(weight.shape[1], -1) ##权重重塑
             if bias is not None:
                 return torch.matmul(x, weight) + bias
             else:
