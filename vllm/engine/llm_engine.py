@@ -1037,7 +1037,7 @@ class LLMEngine:
             # ray_worker_outputs = ray.get(ray_worker_outputs)
             # ----------------------END-----------------------
             # 定义批次大小
-            batch_size = 10  # 可以根据实际情况调整
+            batch_size = 32  # 可以根据实际情况调整
 
             # 用于存储所有批次的结果
             ray_worker_outputs = []
