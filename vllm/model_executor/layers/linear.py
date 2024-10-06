@@ -81,13 +81,22 @@ class UnquantizedLinearMethod(LinearMethodBase):
             return F.linear(x, weight)
         
         if self.use_llama_nn:
-            weight = weight.reshape(weight.shape[1], -1) 
+            weight = weight.reshape(weight.shape[1], -1) ##权重重塑
             if bias is not None:
                 return torch.matmul(x, weight) + bias
             else:
                 return torch.matmul(x, weight) 
         else:
             return F.linear(x, weight, bias)
+        """参数提取:
+        从 weights 字典中提取权重 weight。
+        分离偏置添加:
+        如果 self.separate_bias_add 为 True,首先调用 F.linear 进行矩阵乘法(x @ weight),然后根据 bias 的存在与否决定是否加上偏置。
+        使用 LLAMA NN:
+        如果 self.use_llama_nn 为 True,权重重塑为 (output_size, -1)，以便与输入 x 进行矩阵乘法。
+        根据 bias 的存在与否，选择是否加上偏置。
+        默认情况:
+        使用 PyTorch 的 F.linear 直接进行矩阵乘法和偏置的加法。"""
 
 
 class ReplicatedLinear(torch.nn.Module):
@@ -712,16 +721,28 @@ class RowParallelLinear(torch.nn.Module):
         param_data.copy_(loaded_weight)
 
     def forward(self, input_):
-        # Set up backprop all-reduce.
+        # Set up backprop all-reduce. ####检查输入是否已经被并行化
         if self.input_is_parallel:
             input_parallel = input_
         else:
             tp_rank = get_tensor_model_parallel_rank()
-            splitted_input = split_tensor_along_last_dim(
+            splitted_input = split_tensor_along_last_dim( ####前输入尚未并行化。为了并行化输入数据，代码通过 split_tensor_along_last_dim 方法，按照最后一个维度（通常是特征维度）将输入张量划分为多个部分，每个 GPU 得到其中的一部分数据
                 input_, num_partitions=self.tp_size)
-            input_parallel = splitted_input[tp_rank].contiguous()
-
+            input_parallel = splitted_input[tp_rank].contiguous()####contiguous: 确保选中的输入块是内存上连续的，以便后续操作中可以直接使用，避免潜在的性能问题
+        #######################################
+        # 确保输入是合适的形状，以便进行矩阵乘法
+        input_shape = input_parallel.shape
+        if len(input_shape) == 2:  # 如果输入是2D
+            input_parallel = input_parallel.unsqueeze(1)  # 添加一个维度以兼容批处理
+        #######################################
         # Matrix multiply.
+        
+
+        """apply_weights: 这个函数负责执行矩阵乘法，主要是将输入张量与权重矩阵相乘。
+        self.linear_method 是线性计算的实现类，可能是未量化或量化的线性方法，允许模型根据不同需求使用不同的实现。
+        self.linear_weights 包含了当前层的权重信息，它们是按照并行策略进行存储和划分的。
+        在这里，矩阵乘法的计算是并行化的，因为每个 GPU 都只负责输入张量的一部分，计算该部分的输出"""
+        
         output_parallel = self.linear_method.apply_weights(
             self.linear_weights, input_parallel)
         if self.reduce_results and self.tp_size > 1:
