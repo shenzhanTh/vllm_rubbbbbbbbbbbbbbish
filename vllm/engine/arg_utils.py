@@ -20,7 +20,7 @@ class EngineArgs:
     kv_cache_dtype: str = 'float16'
     seed: int = 0
     max_model_len: Optional[int] = None
-    worker_use_ray: bool = False
+    worker_use_ray: bool = True
     pipeline_parallel_size: int = 0
     tensor_parallel_size: int = 0
     max_parallel_loading_workers: Optional[int] = None
