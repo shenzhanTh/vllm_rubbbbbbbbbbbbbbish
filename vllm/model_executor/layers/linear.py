@@ -217,6 +217,7 @@ class ColumnParallelLinear(torch.nn.Module):
             self.register_parameter("bias", None)
         self.use_llama_nn = os.environ.get('LLAMA_NN') == '1'
 
+    @torch.compile
     def weight_loader(self, param: Parameter, loaded_weight: torch.Tensor):
         tp_rank = get_tensor_model_parallel_rank()
         output_dim = getattr(param, "output_dim", None)
