@@ -17,7 +17,7 @@ def rms_norm_kernel(x_ptr, weight_ptr, output_ptr, n_elements, variance_epsilon,
     mask = offsets < n_elements
 
     # Load input tensor x
-    x = tl.load(x_ptr + offsets, mask=mask, dtype=tl.float32)
+    x = tl.load(x_ptr + offsets, mask=mask)
     
     # Compute the mean of squares
     squared = x * x
@@ -43,7 +43,7 @@ def rms_norm(x: torch.Tensor, weight: torch.Tensor, variance_epsilon: float) -> 
     grid = lambda meta: (triton.cdiv(n_elements, meta['BLOCK_SIZE']), )
     
     # 调用 Triton 内核
-    rms_norm_kernel[grid](x.data_ptr(), weight.data_ptr(), output.data_ptr(), n_elements, variance_epsilon, BLOCK_SIZE=256)
+    rms_norm_kernel[grid](x, weight, output.data_ptr(), n_elements, variance_epsilon, BLOCK_SIZE=256)
     
     return output
 
