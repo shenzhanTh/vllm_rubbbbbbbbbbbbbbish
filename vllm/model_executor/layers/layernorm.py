@@ -9,9 +9,8 @@ import triton
 import triton.language as tl
 
 @triton.jit
-def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements):
+def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements,block_size):
     pid = tl.program_id(0)
-    block_size = 64
     idx = pid * block_size + tl.arange(0, block_size)
 
     # 使用掩码避免越界
@@ -100,7 +99,7 @@ class RMSNorm(nn.Module):
         # 使用 Triton 内核进行 RMSNorm
         out = torch.empty_like(x)
         grid = (num_elements + 255) // 256,
-        rms_norm_kernel[grid](x, self.weight.data, self.variance_epsilon, out, residual, num_elements)
+        rms_norm_kernel[grid](x, self.weight.data, self.variance_epsilon, out, residual, num_elements,64)
         if residual is not None:
             out += residual.to(out.dtype)
         return out
