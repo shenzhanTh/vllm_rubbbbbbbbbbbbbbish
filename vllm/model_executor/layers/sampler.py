@@ -519,15 +519,13 @@ def _sample(
     logprobs: torch.Tensor,
     sampling_metadata: SamplingMetadata,
 ) -> List[Tuple[List[int], List[int]]]:
-    # 初始化采样类型分类和索引
+    logger.info("sample")
     categorized_seq_group_ids = {t: [] for t in SamplingType}
     categorized_sample_indices = sampling_metadata.categorized_sample_indices
     
-    # 使用局部变量缓存以减少重复访问
     seq_groups_metadata = sampling_metadata.seq_groups
     num_prompts = sampling_metadata.num_prompts
     
-    # 分类采样类型的序列组ID
     for i, seq_group in enumerate(seq_groups_metadata):
         _, sampling_params = seq_group
         categorized_seq_group_ids[sampling_params.sampling_type].append(i)
@@ -536,10 +534,8 @@ def _sample(
     sample_metadata = {}
     multinomial_samples = {}
 
-    # 将 sample_indices 提前转换为 long，避免每次转换
     categorized_sample_indices = {key: val.long() for key, val in categorized_sample_indices.items()}
 
-    # 第一个循环：避免GPU-CPU同步
     for sampling_type in SamplingType:
         sample_indices = categorized_sample_indices[sampling_type]
         num_tokens = len(sample_indices)
@@ -569,7 +565,6 @@ def _sample(
         else:
             raise ValueError(f"Unsupported sampling type: {sampling_type}")
 
-    # 第二个循环：GPU<->CPU同步发生在此处
     for sampling_type, (seq_group_ids, seq_groups, is_prompts, sample_indices) in sample_metadata.items():
         if sampling_type == SamplingType.GREEDY:
             sample_results = _greedy_sample(seq_groups, greedy_samples)
@@ -579,7 +574,6 @@ def _sample(
             sample_results = _beam_search_sample(seq_groups, is_prompts, sampling_metadata.seq_data, beam_search_logprobs)
         sample_results_dict.update(zip(seq_group_ids, sample_results))
 
-    # 构建最终的结果列表
     sample_results = [sample_results_dict[i] for i in range(len(seq_groups_metadata))]
     return sample_results
 
