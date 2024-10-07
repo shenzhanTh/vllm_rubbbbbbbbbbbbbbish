@@ -10,7 +10,7 @@ from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           PreTrainedTokenizerBase)
 from tqdm import tqdm
 
-from torch.profiler import profile, ProfilerActivity
+from torch.profiler import profile, record_function, ProfilerActivity
 
 from vllm.logger import init_logger
 
@@ -193,7 +193,7 @@ def run_mii(
     end = time.perf_counter()
     return end - start
 
-with profile(activities=[ProfilerActivity.CPU], with_stack=True) as prof:#######toch.profiler
+with profile(activities=[ProfilerActivity.CPU],with_stack=True) as prof:#######toch.profiler
     def main(args: argparse.Namespace):
         print(args)
         random.seed(args.seed)
@@ -347,13 +347,13 @@ with profile(activities=[ProfilerActivity.CPU], with_stack=True) as prof:#######
                                 "backend.")
         main(args)
 
-# logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
 # 将结果输出到 message.txt 文件
 
-with open("message.txt", "w") as f:
-    f.write(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+# with open("message.txt", "w") as f:
+#     f.write(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
 
 
-prof.export_chrome_trace("trace.json")
+# prof.export_chrome_trace("trace.json")
 
 logger.info(f"Profiling results 保存 to meaaage.txt  同时trace.json已经生成")
