@@ -1,7 +1,7 @@
 """A layer that samples the next tokens from the model's outputs."""
 from typing import Dict, List, Optional, Tuple
 
-import torch
+import torch # type: ignore
 import torch.nn as nn
 
 from vllm.model_executor.parallel_utils.communication_op import (
@@ -11,7 +11,26 @@ from vllm.sampling_params import SamplingParams, SamplingType
 from vllm.sequence import (PromptLogprobs, SampleLogprobs, SamplerOutput,
                            SequenceData, SequenceGroupOutput, SequenceOutput)
 from vllm.utils import is_neuron
+from vllm.logger import init_logger
+logger = init_logger(__name__)
 
+class Autocast:
+    def __init__(self, enabled: bool = True, dtype: torch.dtype = torch.float16):
+        self.enabled = enabled
+        self.dtype = dtype
+        self.prev_dtype = torch.get_default_dtype()
+
+    def __enter__(self):
+        if self.enabled:
+            torch.set_default_dtype(self.dtype)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.enabled:
+            torch.set_default_dtype(self.prev_dtype)
+        return exc_type is None
+    
+    
 
 class Sampler(nn.Module):
     """Samples the next tokens from the model's outputs.
@@ -50,80 +69,66 @@ class Sampler(nn.Module):
             logits = logits[:, :self.org_vocab_size]
         return logits
 
-    def forward(
-        self,
-        embedding: torch.Tensor,
-        hidden_states: torch.Tensor,
-        sampling_metadata: SamplingMetadata,
-        embedding_bias: Optional[torch.Tensor] = None,
-    ) -> Optional[SamplerOutput]:
-        # Get the hidden states that we use for sampling.
+def forward(
+    self,
+    embedding: torch.Tensor,
+    hidden_states: torch.Tensor,
+    sampling_metadata: SamplingMetadata,
+    embedding_bias: Optional[torch.Tensor] = None,
+) -> Optional[SamplerOutput]:
+    
+    with torch.no_grad():  # 禁用梯度追踪以提升推理性能
+        # Check if we're using logits as hidden states
         if self.logits_as_hidden_states:
             logits = hidden_states
         else:
-            hidden_states = _prune_hidden_states(hidden_states,
-                                                 sampling_metadata)
-
-            # Get the logits for the next tokens.
+            # Prune hidden states as necessary and compute logits
+            hidden_states = _prune_hidden_states(hidden_states, sampling_metadata)
             logits = self._get_logits(hidden_states, embedding, embedding_bias)
 
-        # Only perform sampling in the driver worker.
-        # Note: `_get_logits` is still distributed across TP workers because
-        # the `embedding` weight is distributed across TP workers.
-        # TODO(zhuohan): Change the get_logits part to a separate stage.
+        # Early exit if we're not performing sampling
         if not sampling_metadata.perform_sampling:
             return None
 
         assert logits is not None
         _, vocab_size = logits.shape
-        #修改为精度
-        logits = logits.half()
-        # Apply logits processors (if any).
-        logits = _apply_logits_processors(logits, sampling_metadata)
 
-        # Prepare sampling tensors with pinned memory to avoid blocking.
-        (sampling_tensors, do_penalties, do_top_p_top_k,
-         do_min_p) = SamplingTensors.from_sampling_metadata(
-             sampling_metadata, vocab_size, logits.device, logits.dtype)
+        with Autocast(enabled=True, dtype=torch.float16):  
+            logger.info("自动半精度转换")
+            logits = logits.to(torch.float16) 
+            logits = _apply_logits_processors(logits, sampling_metadata)
 
-        # Apply presence and frequency penalties.
-        if do_penalties:
-            logits = _apply_penalties(logits, sampling_tensors.prompt_tokens,
-                                      sampling_tensors.output_tokens,
-                                      sampling_tensors.presence_penalties,
-                                      sampling_tensors.frequency_penalties,
-                                      sampling_tensors.repetition_penalties)
+            sampling_tensors, do_penalties, do_top_p_top_k, do_min_p = SamplingTensors.from_sampling_metadata(
+                sampling_metadata, vocab_size, logits.device, logits.dtype
+            )
 
-        # Apply temperature scaling.
-        # Use in-place division to avoid creating a new tensor.
-        logits.div_(sampling_tensors.temperatures.unsqueeze_(dim=1))
+            logits.div_(sampling_tensors.temperatures.unsqueeze_(dim=1))  # 原地操作
 
-        if do_top_p_top_k:
-            logits = _apply_top_k_top_p(logits, sampling_tensors.top_ps,
-                                        sampling_tensors.top_ks)
+            if do_penalties or do_top_p_top_k or do_min_p:
+                if do_penalties:
+                    logits = _apply_penalties(
+                        logits,
+                        sampling_tensors.prompt_tokens,
+                        sampling_tensors.output_tokens,
+                        sampling_tensors.presence_penalties,
+                        sampling_tensors.frequency_penalties,
+                        sampling_tensors.repetition_penalties,
+                    )
 
-        if do_min_p:
-            logits = _apply_min_p(logits, sampling_tensors.min_ps)
+                if do_top_p_top_k:
+                    logits = _apply_top_k_top_p(logits, sampling_tensors.top_ps, sampling_tensors.top_ks)
 
-        # We use float32 for probabilities and log probabilities.
-        # Compute the probabilities.
-        probs = torch.softmax(logits, dim=-1, dtype=torch.float16)
-        # Compute the log probabilities.
-        # Use log_softmax to ensure numerical stability.
-        #修改为半精度
-        # probs = torch.softmax(logits, dim=-1, dtype=torch.float16)
-        # Compute the log probabilities.
-        # Use log_softmax to ensure numerical stability.
-        #修改为半精度
-        logprobs = torch.log_softmax(logits, dim=-1, dtype=torch.float16)
+                if do_min_p:
+                    logits = _apply_min_p(logits, sampling_tensors.min_ps)
 
-        # Sample the next tokens.
+            probs = torch.softmax(logits, dim=-1, dtype=torch.float16)
+            logprobs = torch.log_softmax(logits, dim=-1, dtype=torch.float16)
+
         sample_results = _sample(probs, logprobs, sampling_metadata)
-        # Get the logprobs query results.
-        prompt_logprobs, sample_logprobs = _get_logprobs(
-            logprobs, sampling_metadata, sample_results)
-        return _build_sampler_output(sample_results, sampling_metadata,
-                                     prompt_logprobs, sample_logprobs)
+        prompt_logprobs, sample_logprobs = _get_logprobs(logprobs, sampling_metadata, sample_results)
+        return _build_sampler_output(sample_results, sampling_metadata, prompt_logprobs, sample_logprobs)
+
+
 
 
 def _prune_hidden_states(
