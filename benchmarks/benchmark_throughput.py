@@ -193,20 +193,20 @@ def run_mii(
     end = time.perf_counter()
     return end - start
 
-# with profile(activities=[ProfilerActivity.CPU],with_stack=True) as prof:#######toch.profiler
+with profile(activities=[ProfilerActivity.CPU],with_stack=True) as prof:#######toch.profiler
 # @profile(activities=[ProfilerActivity.CPU], record_shapes=True, with_stack=True)
-with torch.profiler.profile(
-    activities=[
-        torch.profiler.ProfilerActivity.CPU,
-        torch.profiler.ProfilerActivity.CUDA],
-    schedule=torch.profiler.schedule(
-        wait=1,
-        warmup=1,
-        active=2),
-    record_shapes=True,
-    profile_memory=True,  # This will take 1 to 2 minutes. Setting it to False could greatly speedup.
-    with_stack=True
-    ) as prof:
+# with torch.profiler.profile(
+#     activities=[
+#         torch.profiler.ProfilerActivity.CPU,
+#         torch.profiler.ProfilerActivity.CUDA],
+#     schedule=torch.profiler.schedule(
+#         wait=1,
+#         warmup=1,
+#         active=2),
+#     record_shapes=True,
+#     profile_memory=True,  # This will take 1 to 2 minutes. Setting it to False could greatly speedup.
+#     with_stack=True
+#     ) as prof:
     def main(args: argparse.Namespace):
         print(args)
         random.seed(args.seed)
