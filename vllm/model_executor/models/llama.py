@@ -25,8 +25,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 from torch import nn
-from transformers import LlamaConfig
-from vllm.logger import init_logger
+from transformers import LlamaConfig # type: ignore
+
 from vllm.config import LoRAConfig
 from vllm.model_executor.input_metadata import InputMetadata
 from vllm.model_executor.layers.activation import SiluAndMul
@@ -46,67 +46,14 @@ from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.model_executor.weight_utils import (default_weight_loader,
                                               hf_model_weights_iterator)
 from vllm.sequence import SamplerOutput
-import triton
-import triton.language as tl
-import math
+from vllm.logger import init_logger
+logger = init_logger(__name__)
+
 
 KVCache = Tuple[torch.Tensor, torch.Tensor]
 
-logger = init_logger(__name__)
-#新增部分
-# @triton.jit
-# def weight_loader_kernel(param_ptr, loaded_weight_ptr, num_weights):
-#     # param_ptr 和 loaded_weight_ptr 是指向数据的指针
-#     # num_weights 是要加载的权重数量
-#     # 这里可以用 thread_id 来处理多个线程的并行执行
-#     pid = tl.program_id(0)
-#     # 计算每个线程要处理的权重
-#     weight_idx = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
 
-#     # 执行加载操作
-#     for i in weight_idx:
-#         if i < num_weights:
-#             param = tl.load(param_ptr + i)  # 加载参数
-#             loaded_weight = tl.load(loaded_weight_ptr + i)  # 加载权重
-#             param.copy_(loaded_weight)  # 拷贝权重
-# @triton.jit
-# def self_attention_kernel(
-#     positions, hidden_states, kv_cache, input_metadata,
-#     output, num_heads, head_dim, num_elements, 
-#     **meta):
-    
-#     pid = tl.program_id(0)
-#     block_size = tl.block_size
-#     idx = pid * block_size + tl.arange(0, block_size)
-    
-#     # 使用掩码避免越界
-#     mask = idx < num_elements
-    
-#     # 自注意力计算示例
-#     # 这里简单地实现点乘，你可以根据具体需求进行调整
-#     for head in range(num_heads):
-#         start = head * head_dim
-#         query = hidden_states[idx, start:start + head_dim]
-#         key = hidden_states[idx, start:start + head_dim]  # 根据你的逻辑调整
-#         value = hidden_states[idx, start:start + head_dim]  # 根据你的逻辑调整
-        
-#         # 点乘注意力计算（可替换为更复杂的逻辑）
-#         attention_scores = tl.dot(query, key.T)
-#         attention_weights = tl.softmax(attention_scores)
-#         output[idx] += tl.dot(attention_weights, value)
 
-# @triton.jit
-# def mlp_kernel(hidden_states, output, num_elements):
-#     pid = tl.program_id(0)
-#     block_size = tl.block_size
-#     idx = pid * block_size + tl.arange(0, block_size)
-
-#     # 使用掩码避免越界
-#     mask = idx < num_elements
-    
-#     # MLP 计算示例（简单的线性变换）
-#     weight = tl.load(hidden_states)  # 假设 hidden_states 是权重矩阵
-#     output[idx] = tl.dot(weight[idx], weight.T)
 class LlamaMLP(nn.Module):
 
     def __init__(
@@ -201,7 +148,7 @@ class LlamaAttention(nn.Module):
                                    self.scaling,
                                    num_kv_heads=self.num_kv_heads,
                                    sliding_window=sliding_window)
-    
+
     def forward(
         self,
         positions: torch.Tensor,
@@ -254,7 +201,7 @@ class LlamaDecoderLayer(nn.Module):
                                        eps=config.rms_norm_eps)
         self.post_attention_layernorm = RMSNorm(config.hidden_size,
                                                 eps=config.rms_norm_eps)
-    #now 10.8s 占比 14.03%，准备优化
+
     def forward(
         self,
         positions: torch.Tensor,
@@ -309,8 +256,7 @@ class LlamaModel(nn.Module):
             for _ in range(config.num_hidden_layers)
         ])
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        
-    
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -384,7 +330,7 @@ class LlamaForCausalLM(nn.Module):
             if not lora_config else lora_config.lora_vocab_padding_size,
         )
         self.sampler = Sampler(self.unpadded_vocab_size, config.vocab_size)
-    
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -395,7 +341,7 @@ class LlamaForCausalLM(nn.Module):
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    input_metadata)
         return hidden_states
-    
+
     def sample(
         self,
         hidden_states: torch.Tensor,
@@ -410,39 +356,25 @@ class LlamaForCausalLM(nn.Module):
                      cache_dir: Optional[str] = None,
                      load_format: str = "auto",
                      revision: Optional[str] = None):
-        # stacked_params_mapping = [
-        #     # (param_name, shard_name, shard_id)
-        #     ("qkv_proj", "q_proj", "q"),
-        #     ("qkv_proj", "k_proj", "k"),
-        #     ("qkv_proj", "v_proj", "v"),
-        #     ("gate_up_proj", "gate_proj", 0),
-        #     ("gate_up_proj", "up_proj", 1),
-        # ]
-        logger.info("change stacked mapping become a dictionary\n")
-        stacked_params_mapping = {
-            "q_proj": ("qkv_proj", "q"),
-            "k_proj": ("qkv_proj", "k"),
-            "v_proj": ("qkv_proj", "v"),
-            "gate_proj": ("gate_up_proj", 0),
-            "up_proj": ("gate_up_proj", 1),
-        }
-        logger.info("I CHANGED THE WAY TO LOAD\n")
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("gate_up_proj", "gate_proj", 0),
+            ("gate_up_proj", "up_proj", 1),
+        ]
         params_dict = dict(self.named_parameters())
-        # loop_count = 0
         for name, loaded_weight in hf_model_weights_iterator(
                 model_name_or_path, cache_dir, load_format, revision):
-            # if "rotary_emb.inv_freq" in name:
-            #     continue
-            # if ("rotary_emb.cos_cached" in name
-            #         or "rotary_emb.sin_cached" in name):
-            #     # Models trained using ColossalAI may include these tensors in
-            #     # the checkpoint. Skip them.
-            #     continue
-            # logger.info("change the switch")
-            if "rotary_emb.inv_freq" in name or ("rotary_emb.cos_cached" in name or "rotary_emb.sin_cached" in name):
-                    continue
-            for (param_name ,(weight_name, shard_id)) in stacked_params_mapping.items():
-                # loop_count += 1,loop_count==1134
+            if "rotary_emb.inv_freq" in name:
+                continue
+            if ("rotary_emb.cos_cached" in name
+                    or "rotary_emb.sin_cached" in name):
+                # Models trained using ColossalAI may include these tensors in
+                # the checkpoint. Skip them.
+                continue
+            for (param_name, weight_name, shard_id) in stacked_params_mapping:
                 if weight_name not in name:
                     continue
                 name = name.replace(weight_name, param_name)
@@ -450,7 +382,6 @@ class LlamaForCausalLM(nn.Module):
                 if name.endswith(".bias") and name not in params_dict:
                     continue
                 param = params_dict[name]
-                #尝试利用trition优化加载
                 weight_loader = param.weight_loader
                 weight_loader(param, loaded_weight, shard_id)
                 break
