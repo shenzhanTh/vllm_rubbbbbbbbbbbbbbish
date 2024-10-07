@@ -353,7 +353,6 @@ with torch.profiler.profile(
         wait=1,
         warmup=1,
         active=2),
-    on_trace_ready=torch.profiler.tensorboard_trace_handler('./result', worker_name='worker0'),
     record_shapes=True,
     profile_memory=True,  # This will take 1 to 2 minutes. Setting it to False could greatly speedup.
     with_stack=True
@@ -362,7 +361,7 @@ with torch.profiler.profile(
 
     main(args)
 
-logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))# 将结果输出到 message.txt 文件
+logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=100))# 将结果输出到 message.txt 文件
 
 
 
