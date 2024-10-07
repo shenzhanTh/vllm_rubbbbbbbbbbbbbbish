@@ -9,7 +9,7 @@ import triton
 import triton.language as tl
 
 @triton.jit
-def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements):
+def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements,BLOCK_SIZE: tl.constexpr):
     pid = tl.program_id(0)
     idx = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
 
@@ -100,7 +100,7 @@ class RMSNorm(nn.Module):
         out = torch.empty_like(x)
         grid = (num_elements + 255) // 256,
         BLOCK_SIZE = 64
-        rms_norm_kernel[grid,BLOCK_SIZE](x, self.weight.data, self.variance_epsilon, out, residual, num_elements)
+        rms_norm_kernel[(grid,BLOCK_SIZE)](x, self.weight.data, self.variance_epsilon, out, residual, num_elements,BLOCK_SIZE)
         if residual is not None:
             out += residual.to(out.dtype)
         return out
