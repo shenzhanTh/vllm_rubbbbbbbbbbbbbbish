@@ -362,8 +362,6 @@ with torch.profiler.profile(
 
     main(args)
 
-# 输出 trace.json 文件
-prof.export_chrome_trace("trace.json")
 logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))# 将结果输出到 message.txt 文件
 
 
