@@ -196,7 +196,7 @@ def run_mii(
 # with profile(activities=[ProfilerActivity.CPU],with_stack=True) as prof:#######toch.profiler
 # @profile(activities=[ProfilerActivity.CPU], record_shapes=True, with_stack=True)
 def main(args: argparse.Namespace):
-    with profile(activities=[ProfilerActivity.CPU], record_shapes=True, with_stack=True):
+    with profile(activities=[ProfilerActivity.CPU], record_shapes=True, with_stack=True) as prof:
         print(args)
         random.seed(args.seed)
 
