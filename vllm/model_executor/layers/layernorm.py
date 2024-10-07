@@ -28,7 +28,7 @@ def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements, BLOCK_SI
     # 计算均值和方差
     mean_square = sum_square / sum_count
     variance = mean_square + epsilon
-    scale = tl.rsqrt(variance)
+    scale = 1/tl.sqrt(variance)
 
     # 应用 RMSNorm
     for i in range(BLOCK_SIZE):
