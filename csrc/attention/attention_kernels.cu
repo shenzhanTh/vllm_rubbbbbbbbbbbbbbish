@@ -393,67 +393,133 @@ __device__ void paged_attention_kernel(
 
 
 
-  // Perform reduction within each warp.
+//   // Perform reduction within each warp.
+// #pragma unroll
+//   for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
+//     float acc = accs[i];
+// #pragma unroll
+//     for (int mask = NUM_V_VECS_PER_ROW / 2; mask >= 1; mask /= 2) {
+//       acc += VLLM_SHFL_XOR_SYNC(acc, mask);
+//     }
+//     accs[i] = acc;
+//   }
+
+//   // NOTE(woosuk): A barrier is required because the shared memory space for logits
+//   // is reused for the output.
+//   __syncthreads();
+
+//   // Perform reduction across warps.
+//   float* out_smem = reinterpret_cast<float*>(shared_mem);
+// #pragma unroll
+//   for (int i = NUM_WARPS; i > 1; i /= 2) {
+//     int mid = i / 2;
+//     // Upper warps write to shared memory.
+//     if (warp_idx >= mid && warp_idx < i) {
+//       float* dst = &out_smem[(warp_idx - mid) * HEAD_SIZE];
+// #pragma unroll
+//       for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
+//         const int row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;
+//         if (row_idx < HEAD_SIZE && lane % NUM_V_VECS_PER_ROW == 0) {
+//           dst[row_idx] = accs[i];
+//         }
+//       }
+//     }
+//     __syncthreads();
+
+//     // Lower warps update the output.
+//     if (warp_idx < mid) {
+//       const float* src = &out_smem[warp_idx * HEAD_SIZE];
+// #pragma unroll
+//       for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
+//         const int row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;
+//         if (row_idx < HEAD_SIZE && lane % NUM_V_VECS_PER_ROW == 0) {
+//           accs[i] += src[row_idx];
+//         }
+//       }
+//     }
+//     __syncthreads();
+//   }
+
+//   // Write the final output.
+//   if (warp_idx == 0) {
+//     scalar_t* out_ptr = out + seq_idx * num_heads * max_num_partitions * HEAD_SIZE
+//                             + head_idx * max_num_partitions * HEAD_SIZE
+//                             + partition_idx * HEAD_SIZE;
+// #pragma unroll
+//     for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
+//       const int row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;
+//       if (row_idx < HEAD_SIZE && lane % NUM_V_VECS_PER_ROW == 0) {
+//         from_float(*(out_ptr + row_idx), accs[i]);
+//       }
+//     }
+//   }
+// }
+
+// Perform reduction within each warp.
+/*--------------------------------------------------*/
 #pragma unroll
-  for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
+for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
     float acc = accs[i];
 #pragma unroll
     for (int mask = NUM_V_VECS_PER_ROW / 2; mask >= 1; mask /= 2) {
-      acc += VLLM_SHFL_XOR_SYNC(acc, mask);
+        acc += VLLM_SHFL_XOR_SYNC(acc, mask);
     }
-    accs[i] = acc;
-  }
+    accs[i] = acc;  // 尽量将中间结果保存在寄存器中，减少共享内存写入
+}
 
-  // NOTE(woosuk): A barrier is required because the shared memory space for logits
-  // is reused for the output.
-  __syncthreads();
+// Barrier for shared memory reuse
+__syncthreads();
 
-  // Perform reduction across warps.
-  float* out_smem = reinterpret_cast<float*>(shared_mem);
+// Perform reduction across warps.
+float* out_smem = reinterpret_cast<float*>(shared_mem);
+// 使用局部变量避免重复读取共享内存
+float local_acc[NUM_ROWS_PER_THREAD];
 #pragma unroll
-  for (int i = NUM_WARPS; i > 1; i /= 2) {
+for (int i = NUM_WARPS; i > 1; i /= 2) {
     int mid = i / 2;
     // Upper warps write to shared memory.
     if (warp_idx >= mid && warp_idx < i) {
-      float* dst = &out_smem[(warp_idx - mid) * HEAD_SIZE];
+        float* dst = &out_smem[(warp_idx - mid) * HEAD_SIZE];
 #pragma unroll
-      for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
-        const int row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;
-        if (row_idx < HEAD_SIZE && lane % NUM_V_VECS_PER_ROW == 0) {
-          dst[row_idx] = accs[i];
+        for (int j = 0; j < NUM_ROWS_PER_THREAD; j++) {
+            const int row_idx = lane / NUM_V_VECS_PER_ROW + j * NUM_ROWS_PER_ITER;
+            if (row_idx < HEAD_SIZE && (lane % NUM_V_VECS_PER_ROW == 0)) {
+                dst[row_idx] = accs[j];
+            }
         }
-      }
     }
     __syncthreads();
 
     // Lower warps update the output.
     if (warp_idx < mid) {
-      const float* src = &out_smem[warp_idx * HEAD_SIZE];
+        const float* src = &out_smem[warp_idx * HEAD_SIZE];
 #pragma unroll
-      for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
-        const int row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;
-        if (row_idx < HEAD_SIZE && lane % NUM_V_VECS_PER_ROW == 0) {
-          accs[i] += src[row_idx];
+        for (int j = 0; j < NUM_ROWS_PER_THREAD; j++) {
+            const int row_idx = lane / NUM_V_VECS_PER_ROW + j * NUM_ROWS_PER_ITER;
+            if (row_idx < HEAD_SIZE && (lane % NUM_V_VECS_PER_ROW == 0)) {
+                local_acc[j] += src[row_idx];  // 使用局部变量
+            }
         }
-      }
     }
     __syncthreads();
-  }
+}
 
-  // Write the final output.
-  if (warp_idx == 0) {
+// Write the final output.
+if (warp_idx == 0) {
     scalar_t* out_ptr = out + seq_idx * num_heads * max_num_partitions * HEAD_SIZE
-                            + head_idx * max_num_partitions * HEAD_SIZE
-                            + partition_idx * HEAD_SIZE;
+                        + head_idx * max_num_partitions * HEAD_SIZE
+                        + partition_idx * HEAD_SIZE;
 #pragma unroll
     for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
-      const int row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;
-      if (row_idx < HEAD_SIZE && lane % NUM_V_VECS_PER_ROW == 0) {
-        from_float(*(out_ptr + row_idx), accs[i]);
-      }
+        const int row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;
+        if (row_idx < HEAD_SIZE && (lane % NUM_V_VECS_PER_ROW == 0)) {
+            from_float(*(out_ptr + row_idx), local_acc[i]);  // 最终结果写入
+        }
     }
-  }
 }
+
+/*--------------------------------------------------*/
+
 
 // Grid: (num_heads, num_seqs, 1).
 template<
