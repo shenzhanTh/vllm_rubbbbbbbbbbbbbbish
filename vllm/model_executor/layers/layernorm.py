@@ -43,7 +43,7 @@ def rms_norm(x: torch.Tensor, weight: torch.Tensor, variance_epsilon: float) -> 
     grid = lambda meta: (triton.cdiv(n_elements, meta['BLOCK_SIZE']), )
     
     # 调用 Triton 内核
-    rms_norm_kernel[grid](x, weight, output.data_ptr(), n_elements, variance_epsilon, BLOCK_SIZE=256)
+    rms_norm_kernel[grid](x, weight, output, n_elements, variance_epsilon, BLOCK_SIZE=256)
     
     return output
 
