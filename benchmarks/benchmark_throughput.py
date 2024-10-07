@@ -194,50 +194,51 @@ def run_mii(
     return end - start
 
 # with profile(activities=[ProfilerActivity.CPU],with_stack=True) as prof:#######toch.profiler
-@profile(activities=[ProfilerActivity.CPU], record_shapes=True, with_stack=True)
+# @profile(activities=[ProfilerActivity.CPU], record_shapes=True, with_stack=True)
 def main(args: argparse.Namespace):
-    print(args)
-    random.seed(args.seed)
+    with profile(activities=[ProfilerActivity.CPU], record_shapes=True, with_stack=True):
+        print(args)
+        random.seed(args.seed)
 
-    # Sample the requests.
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.tokenizer, trust_remote_code=args.trust_remote_code)
-    if args.dataset is None:
-        # Synthesize a prompt with the given input length.
-        prompt = "hi" * (args.input_len - 1)
-        requests = [(prompt, args.input_len, args.output_len)
-                    for _ in range(args.num_prompts)]
-    else:
-        requests = sample_requests(args.dataset, args.num_prompts, tokenizer,
+        # Sample the requests.
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.tokenizer, trust_remote_code=args.trust_remote_code)
+        if args.dataset is None:
+            # Synthesize a prompt with the given input length.
+            prompt = "hi" * (args.input_len - 1)
+            requests = [(prompt, args.input_len, args.output_len)
+                        for _ in range(args.num_prompts)]
+        else:
+            requests = sample_requests(args.dataset, args.num_prompts, tokenizer,
+                                    args.output_len)
+
+        if args.backend == "vllm":
+            elapsed_time = run_vllm(requests, args.model, args.tokenizer,
+                                    args.quantization, args.tensor_parallel_size,
+                                    args.seed, args.n, args.use_beam_search,
+                                    args.trust_remote_code, args.dtype,
+                                    args.max_model_len, args.enforce_eager,
+                                    args.kv_cache_dtype, args.device)
+        elif args.backend == "hf":
+            assert args.tensor_parallel_size == 1
+            elapsed_time = run_hf(requests, args.model, tokenizer, args.n,
+                                args.use_beam_search, args.hf_max_batch_size,
+                                args.trust_remote_code)
+        elif args.backend == "mii":
+            elapsed_time = run_mii(requests, args.model, args.tensor_parallel_size,
                                 args.output_len)
-
-    if args.backend == "vllm":
-        elapsed_time = run_vllm(requests, args.model, args.tokenizer,
-                                args.quantization, args.tensor_parallel_size,
-                                args.seed, args.n, args.use_beam_search,
-                                args.trust_remote_code, args.dtype,
-                                args.max_model_len, args.enforce_eager,
-                                args.kv_cache_dtype, args.device)
-    elif args.backend == "hf":
-        assert args.tensor_parallel_size == 1
-        elapsed_time = run_hf(requests, args.model, tokenizer, args.n,
-                            args.use_beam_search, args.hf_max_batch_size,
-                            args.trust_remote_code)
-    elif args.backend == "mii":
-        elapsed_time = run_mii(requests, args.model, args.tensor_parallel_size,
-                            args.output_len)
-    else:
-        raise ValueError(f"Unknown backend: {args.backend}")
-    total_num_tokens = sum(prompt_len + output_len
-                        for _, prompt_len, output_len in requests)
-    if args.dataset is None:
-        total_out_tokens = args.output_len * args.num_prompts
-    else:
-        total_out_tokens = sum(output_len for _, _, output_len in requests) 
-    print(f"Latency: {elapsed_time:.2f} s")
-    print(f"All Throughput: {len(requests) / elapsed_time:.2f} requests/s, "
-        f"{total_num_tokens / elapsed_time:.2f} tokens/s")
-    print(f"Generate Throughput: {total_out_tokens / elapsed_time:.2f} tokens/s")
+        else:
+            raise ValueError(f"Unknown backend: {args.backend}")
+        total_num_tokens = sum(prompt_len + output_len
+                            for _, prompt_len, output_len in requests)
+        if args.dataset is None:
+            total_out_tokens = args.output_len * args.num_prompts
+        else:
+            total_out_tokens = sum(output_len for _, _, output_len in requests) 
+        print(f"Latency: {elapsed_time:.2f} s")
+        print(f"All Throughput: {len(requests) / elapsed_time:.2f} requests/s, "
+            f"{total_num_tokens / elapsed_time:.2f} tokens/s")
+        print(f"Generate Throughput: {total_out_tokens / elapsed_time:.2f} tokens/s")
 
 
 
@@ -348,8 +349,8 @@ if __name__ == "__main__":
                             "backend.")
     main(args)
 
-logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
-# 将结果输出到 message.txt 文件
+
+logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))# 将结果输出到 message.txt 文件
 
 # with open("message.txt", "w") as f:
 #     f.write(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
