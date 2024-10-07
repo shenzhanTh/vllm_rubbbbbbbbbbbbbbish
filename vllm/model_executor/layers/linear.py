@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 import torch
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
-from torch import distributed as dist
+# from torch import distributed as dist
 
 
 from vllm.model_executor.parallel_utils.parallel_state import (
