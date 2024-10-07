@@ -9,16 +9,16 @@ import triton
 import triton.language as tl
 
 @triton.jit
-def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements,block_size):
+def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements):
     pid = tl.program_id(0)
-    idx = pid * block_size + tl.arange(0, block_size)
+    idx = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
 
     # 使用掩码避免越界
     mask = idx < num_elements
 
     # 计算均值和方差
     sum_square = tl.zeros((1,), dtype=tl.float32)
-    for i in range(block_size):
+    for i in range(BLOCK_SIZE):
         if mask[i]:
             sum_square += x[idx[i]] ** 2
 
@@ -28,14 +28,14 @@ def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements,block_siz
     scale = 1/(variance**0.5)
 
     # 应用 RMSNorm
-    for i in range(block_size):
+    for i in range(BLOCK_SIZE):
         if mask[i]:
             normed_value = x[idx[i]] * scale
             output[idx[i]] = normed_value * weight
 
     # 添加残差
     if residual is not None:
-        for i in range(block_size):
+        for i in range(BLOCK_SZIE):
             if mask[i]:
                 output[idx[i]] += residual[idx[i]]
 class RMSNorm(nn.Module):
@@ -99,7 +99,8 @@ class RMSNorm(nn.Module):
         # 使用 Triton 内核进行 RMSNorm
         out = torch.empty_like(x)
         grid = (num_elements + 255) // 256,
-        rms_norm_kernel[grid](x, self.weight.data, self.variance_epsilon, out, residual, num_elements,64)
+        BLOCK_SIZE = 64
+        rms_norm_kernel[grid,BLOCK_SIZE](x, self.weight.data, self.variance_epsilon, out, residual, num_elements)
         if residual is not None:
             out += residual.to(out.dtype)
         return out
