@@ -240,6 +240,9 @@ def main(args: argparse.Namespace):
             f"{total_num_tokens / elapsed_time:.2f} tokens/s")
         print(f"Generate Throughput: {total_out_tokens / elapsed_time:.2f} tokens/s")
 
+    # 输出 trace.json 文件
+    prof.export_chrome_trace("trace.json")
+    logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))# 将结果输出到 message.txt 文件
 
 
 if __name__ == "__main__":
@@ -350,7 +353,6 @@ if __name__ == "__main__":
     main(args)
 
 
-logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))# 将结果输出到 message.txt 文件
 
 # with open("message.txt", "w") as f:
 #     f.write(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
