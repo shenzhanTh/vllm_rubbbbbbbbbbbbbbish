@@ -7,9 +7,8 @@ import torch.nn as nn
 from vllm._C import ops
 import triton
 import triton.language as tl
-
 @triton.jit
-def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements,BLOCK_SIZE: tl.constexpr):
+def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements, BLOCK_SIZE: tl.constexpr):
     pid = tl.program_id(0)
     idx = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
 
@@ -18,24 +17,27 @@ def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements,BLOCK_SIZ
 
     # 计算均值和方差
     sum_square = tl.zeros((1,), dtype=tl.float32)
+    sum_count = tl.zeros((1,), dtype=tl.int32)
+
+    # 计算平方和
     for i in range(BLOCK_SIZE):
         if mask[i]:
             sum_square += x[idx[i]] ** 2
+            sum_count += 1
 
-    sum_square = tl.sum(sum_square)  # 聚合所有块的平方和
-    mean_square = sum_square / num_elements
+    # 计算均值和方差
+    mean_square = sum_square / sum_count
     variance = mean_square + epsilon
-    scale = 1/(variance**0.5)
+    scale = tl.rsqrt(variance)
 
     # 应用 RMSNorm
     for i in range(BLOCK_SIZE):
         if mask[i]:
-            normed_value = x[idx[i]] * scale
-            output[idx[i]] = normed_value * weight
+            output[idx[i]] = x[idx[i]] * scale * weight
 
     # 添加残差
     if residual is not None:
-        for i in range(BLOCK_SZIE):
+        for i in range(BLOCK_SIZE):
             if mask[i]:
                 output[idx[i]] += residual[idx[i]]
 class RMSNorm(nn.Module):
