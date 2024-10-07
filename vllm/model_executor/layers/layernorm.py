@@ -17,29 +17,25 @@ def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements, BLOCK_SI
 
     # 计算均值和方差
     sum_square = tl.zeros((1,), dtype=tl.float32)
-    sum_count = tl.zeros((1,), dtype=tl.int32)
+    count = tl.zeros((1,), dtype=tl.int32)
 
     # 计算平方和
-    for i in range(BLOCK_SIZE):
-        if mask[i]:
-            sum_square += x[idx[i]] ** 2
-            sum_count += 1
+    square_values = tl.where(mask, x[idx] ** 2, 0.0)
+    sum_square += tl.sum(square_values)
+    count += tl.sum(mask)
 
-    # 计算均值和方差
-    mean_square = sum_square / sum_count
-    variance = mean_square + epsilon
-    scale = 1/tl.sqrt(variance)
+    # 使用一个线程计算均值和方差
+    if pid == 0:  # 只有一个线程计算均值和方差
+        mean_square = sum_square / count
+        variance = mean_square + epsilon
+        scale = 1/tl.sqrt(variance)
 
-    # 应用 RMSNorm
-    for i in range(BLOCK_SIZE):
-        if mask[i]:
-            output[idx[i]] = x[idx[i]] * scale * weight
+        # 应用 RMSNorm
+        output[idx] = tl.where(mask, x[idx] * scale * weight, 0.0)
 
-    # 添加残差
-    if residual is not None:
-        for i in range(BLOCK_SIZE):
-            if mask[i]:
-                output[idx[i]] += residual[idx[i]]
+        # 添加残差
+        if residual is not None:
+            output[idx] += tl.where(mask, residual[idx], 0.0)
 class RMSNorm(nn.Module):
     """Root mean square normalization.
 
