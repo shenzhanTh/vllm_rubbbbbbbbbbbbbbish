@@ -394,7 +394,7 @@ class ParallelConfig:
         self.pipeline_parallel_size = pipeline_parallel_size
         if is_neuron():
             # For Neuron device support, here we assign TP=1 to avoid sharding within vLLM directly.
-            # Transformer-neuronx would take neuron_tp_degree attribute, and distribute the workload
+            # Transformer-neuronx would take neuron_tp_degree attribute, and  the workload
             # to multiple NeuronCores.
             self.tensor_parallel_size = 1
             self.neuron_tp_degree = tensor_parallel_size
