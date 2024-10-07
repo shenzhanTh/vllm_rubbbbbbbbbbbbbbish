@@ -7,35 +7,37 @@ import torch.nn as nn
 from vllm._C import ops
 import triton
 import triton.language as tl
-@triton.jit
-def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements, BLOCK_SIZE: tl.constexpr):
-    pid = tl.program_id(0)
-    idx = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
 
-    # 使用掩码避免越界
-    mask = idx < num_elements
 
-    # 计算均值和方差
-    sum_square = tl.zeros((1,), dtype=tl.float32)
-    count = tl.zeros((1,), dtype=tl.int32)
+# @triton.jit
+# def rms_norm_kernel(x, weight, epsilon, output, residual, num_elements, BLOCK_SIZE: tl.constexpr):
+#     pid = tl.program_id(0)
+#     idx = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
 
-    # 计算平方和
-    square_values = tl.where(mask, x[idx] ** 2, 0.0)
-    sum_square += tl.sum(square_values)
-    count += tl.sum(mask)
+#     # 使用掩码避免越界
+#     mask = idx < num_elements
 
-    # 使用一个线程计算均值和方差
-    if pid == 0:  # 只有一个线程计算均值和方差
-        mean_square = sum_square / count
-        variance = mean_square + epsilon
-        scale = 1/tl.sqrt(variance)
+#     # 计算均值和方差
+#     sum_square = tl.zeros((1,), dtype=tl.float32)
+#     count = tl.zeros((1,), dtype=tl.int32)
 
-        # 应用 RMSNorm
-        output[idx] = tl.where(mask, x[idx] * scale * weight, 0.0)
+#     # 计算平方和
+#     square_values = tl.where(mask, x[idx] ** 2, 0.0)
+#     sum_square += tl.sum(square_values)
+#     count += tl.sum(mask)
 
-        # 添加残差
-        if residual is not None:
-            output[idx] += tl.where(mask, residual[idx], 0.0)
+#     # 使用一个线程计算均值和方差
+#     if pid == 0:  # 只有一个线程计算均值和方差
+#         mean_square = sum_square / count
+#         variance = mean_square + epsilon
+#         scale = 1/tl.sqrt(variance)
+
+#         # 应用 RMSNorm
+#         output[idx] = tl.where(mask, x[idx] * scale * weight, 0.0)
+
+#         # 添加残差
+#         if residual is not None:
+#             output[idx] += tl.where(mask, residual[idx], 0.0)
 class RMSNorm(nn.Module):
     """Root mean square normalization.
 
@@ -77,28 +79,28 @@ class RMSNorm(nn.Module):
         x: torch.Tensor,
         residual: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        # if residual is not None:
-        #     ops.fused_add_rms_norm(
-        #         x,
-        #         residual,
-        #         self.weight.data,
-        #         self.variance_epsilon,
-        #     )
-        #     return x, residual
-        # out = torch.empty_like(x)
-        # ops.rms_norm(
-        #     out,
-        #     x,
-        #     self.weight.data,
-        #     self.variance_epsilon,
-        # )
-        # return out
-        num_elements = x.numel()
-        # 使用 Triton 内核进行 RMSNorm
-        out = torch.empty_like(x)
-        grid = (num_elements + 255) // 256,
-        BLOCK_SIZE = 64
-        rms_norm_kernel[(grid,BLOCK_SIZE)](x, self.weight.data, self.variance_epsilon, out, residual, num_elements,BLOCK_SIZE)
         if residual is not None:
-            out += residual.to(out.dtype)
+            ops.fused_add_rms_norm(
+                x,
+                residual,
+                self.weight.data,
+                self.variance_epsilon,
+            )
+            return x, residual
+        out = torch.empty_like(x)
+        ops.rms_norm(
+            out,
+            x,
+            self.weight.data,
+            self.variance_epsilon,
+        )
         return out
+        # num_elements = x.numel()
+        # # 使用 Triton 内核进行 RMSNorm
+        # out = torch.empty_like(x)
+        # grid = (num_elements + 255) // 256,
+        # BLOCK_SIZE = 64
+        # rms_norm_kernel[(grid,BLOCK_SIZE)](x, self.weight.data, self.variance_epsilon, out, residual, num_elements,BLOCK_SIZE)
+        # if residual is not None:
+        #     out += residual.to(out.dtype)
+        # return out
