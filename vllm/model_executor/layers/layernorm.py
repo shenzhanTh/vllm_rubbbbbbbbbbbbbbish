@@ -107,4 +107,5 @@ class RMSNorm(nn.Module):
         output = rms_norm(x, self.weight, self.variance_epsilon)
         if residual is not None:
             output += residual.to(output.dtype)
+            return output, residual  # 返回两个值
         return output
