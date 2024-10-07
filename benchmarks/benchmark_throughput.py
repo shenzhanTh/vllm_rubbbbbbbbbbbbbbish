@@ -195,65 +195,50 @@ def run_mii(
 
 # with profile(activities=[ProfilerActivity.CPU],with_stack=True) as prof:#######toch.profiler
 # @profile(activities=[ProfilerActivity.CPU], record_shapes=True, with_stack=True)
-with torch.profiler.profile(
-    activities=[
-        torch.profiler.ProfilerActivity.CPU,
-        torch.profiler.ProfilerActivity.CUDA],
-    schedule=torch.profiler.schedule(
-        wait=1,
-        warmup=1,
-        active=2),
-    on_trace_ready=torch.profiler.tensorboard_trace_handler('./result', worker_name='worker0'),
-    record_shapes=True,
-    profile_memory=True,  # This will take 1 to 2 minutes. Setting it to False could greatly speedup.
-    with_stack=True
-    ) as prof:
-    def main(args: argparse.Namespace):
-        print(args)
-        random.seed(args.seed)
 
-        # Sample the requests.
-        tokenizer = AutoTokenizer.from_pretrained(
-            args.tokenizer, trust_remote_code=args.trust_remote_code)
-        if args.dataset is None:
-            # Synthesize a prompt with the given input length.
-            prompt = "hi" * (args.input_len - 1)
-            requests = [(prompt, args.input_len, args.output_len)
-                        for _ in range(args.num_prompts)]
-        else:
-            requests = sample_requests(args.dataset, args.num_prompts, tokenizer,
-                                    args.output_len)
+def main(args: argparse.Namespace):
+    print(args)
+    random.seed(args.seed)
 
-        if args.backend == "vllm":
-            elapsed_time = run_vllm(requests, args.model, args.tokenizer,
-                                    args.quantization, args.tensor_parallel_size,
-                                    args.seed, args.n, args.use_beam_search,
-                                    args.trust_remote_code, args.dtype,
-                                    args.max_model_len, args.enforce_eager,
-                                    args.kv_cache_dtype, args.device)
-        elif args.backend == "hf":
-            assert args.tensor_parallel_size == 1
-            elapsed_time = run_hf(requests, args.model, tokenizer, args.n,
-                                args.use_beam_search, args.hf_max_batch_size,
-                                args.trust_remote_code)
-        elif args.backend == "mii":
-            elapsed_time = run_mii(requests, args.model, args.tensor_parallel_size,
+    # Sample the requests.
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.tokenizer, trust_remote_code=args.trust_remote_code)
+    if args.dataset is None:
+        # Synthesize a prompt with the given input length.
+        prompt = "hi" * (args.input_len - 1)
+        requests = [(prompt, args.input_len, args.output_len)
+                    for _ in range(args.num_prompts)]
+    else:
+        requests = sample_requests(args.dataset, args.num_prompts, tokenizer,
                                 args.output_len)
-        else:
-            raise ValueError(f"Unknown backend: {args.backend}")
-        total_num_tokens = sum(prompt_len + output_len
-                            for _, prompt_len, output_len in requests)
-        if args.dataset is None:
-            total_out_tokens = args.output_len * args.num_prompts
-        else:
-            total_out_tokens = sum(output_len for _, _, output_len in requests) 
-        print(f"Latency: {elapsed_time:.2f} s")
-        print(f"All Throughput: {len(requests) / elapsed_time:.2f} requests/s, "
-            f"{total_num_tokens / elapsed_time:.2f} tokens/s")
-        print(f"Generate Throughput: {total_out_tokens / elapsed_time:.2f} tokens/s")
 
-logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))# 将结果输出到 message.txt 文件
-
+    if args.backend == "vllm":
+        elapsed_time = run_vllm(requests, args.model, args.tokenizer,
+                                args.quantization, args.tensor_parallel_size,
+                                args.seed, args.n, args.use_beam_search,
+                                args.trust_remote_code, args.dtype,
+                                args.max_model_len, args.enforce_eager,
+                                args.kv_cache_dtype, args.device)
+    elif args.backend == "hf":
+        assert args.tensor_parallel_size == 1
+        elapsed_time = run_hf(requests, args.model, tokenizer, args.n,
+                            args.use_beam_search, args.hf_max_batch_size,
+                            args.trust_remote_code)
+    elif args.backend == "mii":
+        elapsed_time = run_mii(requests, args.model, args.tensor_parallel_size,
+                            args.output_len)
+    else:
+        raise ValueError(f"Unknown backend: {args.backend}")
+    total_num_tokens = sum(prompt_len + output_len
+                        for _, prompt_len, output_len in requests)
+    if args.dataset is None:
+        total_out_tokens = args.output_len * args.num_prompts
+    else:
+        total_out_tokens = sum(output_len for _, _, output_len in requests) 
+    print(f"Latency: {elapsed_time:.2f} s")
+    print(f"All Throughput: {len(requests) / elapsed_time:.2f} requests/s, "
+        f"{total_num_tokens / elapsed_time:.2f} tokens/s")
+    print(f"Generate Throughput: {total_out_tokens / elapsed_time:.2f} tokens/s")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark the throughput.")
@@ -360,7 +345,27 @@ if __name__ == "__main__":
         if args.tokenizer != args.model:
             raise ValueError("Tokenizer must be the same as the model for MII "
                             "backend.")
+with torch.profiler.profile(
+    activities=[
+        torch.profiler.ProfilerActivity.CPU,
+        torch.profiler.ProfilerActivity.CUDA],
+    schedule=torch.profiler.schedule(
+        wait=1,
+        warmup=1,
+        active=2),
+    on_trace_ready=torch.profiler.tensorboard_trace_handler('./result', worker_name='worker0'),
+    record_shapes=True,
+    profile_memory=True,  # This will take 1 to 2 minutes. Setting it to False could greatly speedup.
+    with_stack=True
+    ) as prof:
+
+
     main(args)
+
+# 输出 trace.json 文件
+prof.export_chrome_trace("trace.json")
+logger.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))# 将结果输出到 message.txt 文件
+
 
 
 
