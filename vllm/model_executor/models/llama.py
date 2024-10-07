@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 from torch import nn
 from transformers import LlamaConfig
-from vllm.logger import init_logger
+
 from vllm.config import LoRAConfig
 from vllm.model_executor.input_metadata import InputMetadata
 from vllm.model_executor.layers.activation import SiluAndMul
@@ -46,11 +46,9 @@ from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.model_executor.weight_utils import (default_weight_loader,
                                               hf_model_weights_iterator)
 from vllm.sequence import SamplerOutput
-import triton
-import triton.language as tl
-import math
 
 KVCache = Tuple[torch.Tensor, torch.Tensor]
+
 
 logger = init_logger(__name__)
 class LlamaMLP(nn.Module):
@@ -147,7 +145,7 @@ class LlamaAttention(nn.Module):
                                    self.scaling,
                                    num_kv_heads=self.num_kv_heads,
                                    sliding_window=sliding_window)
-    
+
     def forward(
         self,
         positions: torch.Tensor,
@@ -200,7 +198,7 @@ class LlamaDecoderLayer(nn.Module):
                                        eps=config.rms_norm_eps)
         self.post_attention_layernorm = RMSNorm(config.hidden_size,
                                                 eps=config.rms_norm_eps)
-    #now 10.8s 占比 14.03%，准备优化
+
     def forward(
         self,
         positions: torch.Tensor,
@@ -255,8 +253,7 @@ class LlamaModel(nn.Module):
             for _ in range(config.num_hidden_layers)
         ])
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        
-    
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -330,7 +327,7 @@ class LlamaForCausalLM(nn.Module):
             if not lora_config else lora_config.lora_vocab_padding_size,
         )
         self.sampler = Sampler(self.unpadded_vocab_size, config.vocab_size)
-    
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -341,7 +338,7 @@ class LlamaForCausalLM(nn.Module):
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    input_metadata)
         return hidden_states
-    
+
     def sample(
         self,
         hidden_states: torch.Tensor,
@@ -356,39 +353,25 @@ class LlamaForCausalLM(nn.Module):
                      cache_dir: Optional[str] = None,
                      load_format: str = "auto",
                      revision: Optional[str] = None):
-        # stacked_params_mapping = [
-        #     # (param_name, shard_name, shard_id)
-        #     ("qkv_proj", "q_proj", "q"),
-        #     ("qkv_proj", "k_proj", "k"),
-        #     ("qkv_proj", "v_proj", "v"),
-        #     ("gate_up_proj", "gate_proj", 0),
-        #     ("gate_up_proj", "up_proj", 1),
-        # ]
-        logger.info("change stacked mapping become a dictionary\n")
-        stacked_params_mapping = {
-            "q_proj": ("qkv_proj", "q"),
-            "k_proj": ("qkv_proj", "k"),
-            "v_proj": ("qkv_proj", "v"),
-            "gate_proj": ("gate_up_proj", 0),
-            "up_proj": ("gate_up_proj", 1),
-        }
-        logger.info("I CHANGED THE WAY TO LOAD\n")
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("gate_up_proj", "gate_proj", 0),
+            ("gate_up_proj", "up_proj", 1),
+        ]
         params_dict = dict(self.named_parameters())
-        # loop_count = 0
         for name, loaded_weight in hf_model_weights_iterator(
                 model_name_or_path, cache_dir, load_format, revision):
-            # if "rotary_emb.inv_freq" in name:
-            #     continue
-            # if ("rotary_emb.cos_cached" in name
-            #         or "rotary_emb.sin_cached" in name):
-            #     # Models trained using ColossalAI may include these tensors in
-            #     # the checkpoint. Skip them.
-            #     continue
-            # logger.info("change the switch")
-            if "rotary_emb.inv_freq" in name or ("rotary_emb.cos_cached" in name or "rotary_emb.sin_cached" in name):
-                    continue
-            for (param_name ,(weight_name, shard_id)) in stacked_params_mapping.items():
-                # loop_count += 1,loop_count==1134
+            if "rotary_emb.inv_freq" in name:
+                continue
+            if ("rotary_emb.cos_cached" in name
+                    or "rotary_emb.sin_cached" in name):
+                # Models trained using ColossalAI may include these tensors in
+                # the checkpoint. Skip them.
+                continue
+            for (param_name, weight_name, shard_id) in stacked_params_mapping:
                 if weight_name not in name:
                     continue
                 name = name.replace(weight_name, param_name)
@@ -396,7 +379,6 @@ class LlamaForCausalLM(nn.Module):
                 if name.endswith(".bias") and name not in params_dict:
                     continue
                 param = params_dict[name]
-                #尝试利用trition优化加载
                 weight_loader = param.weight_loader
                 weight_loader(param, loaded_weight, shard_id)
                 break
