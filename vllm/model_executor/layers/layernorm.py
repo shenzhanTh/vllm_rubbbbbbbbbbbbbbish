@@ -17,7 +17,7 @@ def rms_norm_kernel(x_ptr, weight_ptr, output_ptr, n_elements, variance_epsilon,
     mask = offsets < n_elements
 
     # Load input tensor x
-    x = tl.load(x_ptr + offsets, mask=mask)
+    x = tl.load(tl.make_tensor(x_ptr + offsets, dtype=tl.float32), mask=mask)
     
     # Compute the mean of squares
     squared = x * x
