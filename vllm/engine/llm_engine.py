@@ -24,6 +24,10 @@ from vllm.transformers_utils.tokenizer import (detokenize_incrementally,
 from vllm.utils import (Counter, set_cuda_visible_devices, get_ip,
                         get_open_port, get_distributed_init_method)
 
+"""---------------------------"""
+from concurrent.futures import ThreadPoolExecutor, as_completed
+"""---------------------------"""
+
 if ray:
     from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
@@ -557,6 +561,18 @@ class LLMEngine:
                         eos_token_id=self.get_tokenizer_for_seq(
                             best_running_seq).eos_token_id))
         return current_worst_score >= highest_attainable_score
+    '''
+    引入 ThreadPoolExecutor：用于并行处理子样本。
+    提取子样本处理逻辑：将处理子样本的代码提取到 process_child_sample 函数中。
+    使用 as_completed：收集并行处理的结果并更新 child_seqs。'''
+
+
+    def process_child_sample(self, child_sample, parent):
+        new_child_seq_id = next(self.seq_counter)
+        child = parent.fork(new_child_seq_id)
+        child.append_token_id(child_sample.output_token, child_sample.logprobs)
+        return child, parent
+    
 
     def _process_sequence_group_outputs(self, seq_group: SequenceGroup,
                                         outputs: SequenceGroupOutput) -> None:
@@ -579,32 +595,57 @@ class LLMEngine:
         # List of (child, parent)
         child_seqs: List[Tuple[Sequence, Sequence]] = []
 
-        # Process the child samples for each parent sequence
-        for parent in parent_seqs:
-            child_samples: List[SequenceOutput] = parent_child_dict[
-                parent.seq_id]
-            if len(child_samples) == 0:
-                # This parent sequence has no children samples. Remove
-                # the parent sequence from the sequence group since it will
-                # not be used in the future iterations.
-                parent.status = SequenceStatus.FINISHED_ABORTED
-                seq_group.remove(parent.seq_id)
-                self.scheduler.free_seq(parent)
-                continue
-            # Fork the parent sequence if there are multiple child samples.
-            for child_sample in child_samples[:-1]:
-                new_child_seq_id = next(self.seq_counter)
-                child = parent.fork(new_child_seq_id)
-                child.append_token_id(child_sample.output_token,
-                                      child_sample.logprobs)
+        """-------------------------------------------------"""
+        with ThreadPoolExecutor() as executor:
+            futures = {}
+            for parent in parent_seqs:
+                child_samples = parent_child_dict[parent.seq_id]
+                if len(child_samples) == 0:
+                    parent.status = SequenceStatus.FINISHED_ABORTED
+                    seq_group.remove(parent.seq_id)
+                    self.scheduler.free_seq(parent)
+                    continue
+
+                # Process child samples in parallel
+                for child_sample in child_samples[:-1]:
+                    futures[executor.submit(process_child_sample, child_sample, parent)] = parent
+
+                # Process the last child sample directly
+                last_child_sample = child_samples[-1]
+                parent.append_token_id(last_child_sample.output_token, last_child_sample.logprobs)
+                child_seqs.append((parent, parent))
+
+            for future in as_completed(futures):
+                child, parent = future.result()
                 child_seqs.append((child, parent))
-            # Continue the parent sequence for the last child sample.
-            # We reuse the parent sequence here to reduce redundant memory
-            # copies, especially when using non-beam search sampling methods.
-            last_child_sample = child_samples[-1]
-            parent.append_token_id(last_child_sample.output_token,
-                                   last_child_sample.logprobs)
-            child_seqs.append((parent, parent))
+        """-------------------------------------------------"""
+
+        # # Process the child samples for each parent sequence
+        # for parent in parent_seqs:
+        #     child_samples: List[SequenceOutput] = parent_child_dict[
+        #         parent.seq_id]
+        #     if len(child_samples) == 0:
+        #         # This parent sequence has no children samples. Remove
+        #         # the parent sequence from the sequence group since it will
+        #         # not be used in the future iterations.
+        #         parent.status = SequenceStatus.FINISHED_ABORTED
+        #         seq_group.remove(parent.seq_id)
+        #         self.scheduler.free_seq(parent)
+        #         continue
+        #     # Fork the parent sequence if there are multiple child samples.
+        #     for child_sample in child_samples[:-1]:
+        #         new_child_seq_id = next(self.seq_counter)
+        #         child = parent.fork(new_child_seq_id)
+        #         child.append_token_id(child_sample.output_token,
+        #                               child_sample.logprobs)
+        #         child_seqs.append((child, parent))
+        #     # Continue the parent sequence for the last child sample.
+        #     # We reuse the parent sequence here to reduce redundant memory
+        #     # copies, especially when using non-beam search sampling methods.
+        #     last_child_sample = child_samples[-1]
+        #     parent.append_token_id(last_child_sample.output_token,
+        #                            last_child_sample.logprobs)
+        #     child_seqs.append((parent, parent))
 
         for seq, _ in child_seqs:
             self._decode_sequence(seq, seq_group.sampling_params)
