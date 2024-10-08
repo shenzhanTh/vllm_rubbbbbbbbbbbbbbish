@@ -53,7 +53,7 @@ logger = init_logger(__name__)
 KVCache = Tuple[torch.Tensor, torch.Tensor]
 
 
-
+#TODO:目前版本正确，请执行之前的修改。
 class LlamaMLP(nn.Module):
 
     def __init__(
