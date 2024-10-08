@@ -143,7 +143,7 @@ class LlamaAttention(nn.Module):
             base=rope_theta,
             rope_scaling=rope_scaling,
         )
-        self.attn = PagedAttention(self.num_heads,
+        self.attn = Attention(self.num_heads,
                                    self.head_dim,
                                    self.scaling,
                                    num_kv_heads=self.num_kv_heads,
