@@ -633,7 +633,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             param_data.copy_(loaded_weight)
 
 
-class RowParallelLinear(torch.nn.Module):
+# class RowParallelLinear(torch.nn.Module):
 
 
 # #     """Linear layer with row parallelism.
@@ -766,7 +766,7 @@ class RowParallelLinear(torch.nn.Module):
 # #             output = output_
 # #             output_bias = self.bias
 # #         return output, output_bias
-# class RowParallelLinear(torch.nn.Module):
+class RowParallelLinear(torch.nn.Module):
     """线性层带行并行优化。"""
     
     def __init__(self,
