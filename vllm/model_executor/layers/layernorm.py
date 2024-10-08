@@ -5,47 +5,47 @@ import torch
 import torch.nn as nn
 
 from vllm._C import ops
-import triton
-import triton.language as tl
+# import triton
+# import triton.language as tl
 
-@triton.jit
-def rms_norm_kernel(x_ptr, weight_ptr, output_ptr, n_elements, variance_epsilon, BLOCK_SIZE: tl.constexpr):
-    pid = tl.program_id(axis=0)
-    block_start = pid * BLOCK_SIZE
-    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+# @triton.jit
+# def rms_norm_kernel(x_ptr, weight_ptr, output_ptr, n_elements, variance_epsilon, BLOCK_SIZE: tl.constexpr):
+#     pid = tl.program_id(axis=0)
+#     block_start = pid * BLOCK_SIZE
+#     offsets = block_start + tl.arange(0, BLOCK_SIZE)
 
-    mask = offsets < n_elements
+#     mask = offsets < n_elements
 
-    # Load input tensor x
-    x = tl.load(x_ptr + offsets, mask=mask)
+#     # Load input tensor x
+#     x = tl.load(x_ptr + offsets, mask=mask)
     
-    # Compute the mean of squares
-    squared = x * x
-    mean_squared = tl.sum(squared, axis=0) / n_elements
+#     # Compute the mean of squares
+#     squared = x * x
+#     mean_squared = tl.sum(squared, axis=0) / n_elements
     
-    # Compute the RMS
-    rms = tl.sqrt(mean_squared + variance_epsilon)
+#     # Compute the RMS
+#     rms = tl.sqrt(mean_squared + variance_epsilon)
     
-    # Normalize
-    normalized = (x / rms) * tl.load(weight_ptr)
+#     # Normalize
+#     normalized = (x / rms) * tl.load(weight_ptr)
 
-    # Store the result
-    tl.store(output_ptr + offsets, normalized, mask=mask)
+#     # Store the result
+#     tl.store(output_ptr + offsets, normalized, mask=mask)
 
-def rms_norm(x: torch.Tensor, weight: torch.Tensor, variance_epsilon: float) -> torch.Tensor:
-    # 我们需要预先分配输出。
-    output = torch.empty_like(x)
-    assert x.is_cuda and output.is_cuda
+# def rms_norm(x: torch.Tensor, weight: torch.Tensor, variance_epsilon: float) -> torch.Tensor:
+#     # 我们需要预先分配输出。
+#     output = torch.empty_like(x)
+#     assert x.is_cuda and output.is_cuda
     
-    n_elements = output.numel()
+#     n_elements = output.numel()
     
-    # 定义启动网格
-    grid = lambda meta: (triton.cdiv(n_elements, meta['BLOCK_SIZE']), )
+#     # 定义启动网格
+#     grid = lambda meta: (triton.cdiv(n_elements, meta['BLOCK_SIZE']), )
     
-    # 调用 Triton 内核
-    rms_norm_kernel[grid](x, weight, output, n_elements, variance_epsilon, BLOCK_SIZE=256)
+#     # 调用 Triton 内核
+#     rms_norm_kernel[grid](x, weight, output, n_elements, variance_epsilon, BLOCK_SIZE=256)
     
-    return output
+#     return output
 
 class RMSNorm(nn.Module):
     """Root mean square normalization.
@@ -88,24 +88,24 @@ class RMSNorm(nn.Module):
         x: torch.Tensor,
         residual: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        # if residual is not None:
-        #     ops.fused_add_rms_norm(
-        #         x,
-        #         residual,
-        #         self.weight.data,
-        #         self.variance_epsilon,
-        #     )
-        #     return x, residual
-        # out = torch.empty_like(x)
-        # ops.rms_norm(
-        #     out,
-        #     x,
-        #     self.weight.data,
-        #     self.variance_epsilon,
-        # )
-        # return out
-        output = rms_norm(x, self.weight, self.variance_epsilon)
         if residual is not None:
-            output += residual.to(output.dtype)
-            return output, residual  # 返回两个值
-        return output
+            ops.fused_add_rms_norm(
+                x,
+                residual,
+                self.weight.data,
+                self.variance_epsilon,
+            )
+            return x, residual
+        out = torch.empty_like(x)
+        ops.rms_norm(
+            out,
+            x,
+            self.weight.data,
+            self.variance_epsilon,
+        )
+        return out
+        # output = rms_norm(x, self.weight, self.variance_epsilon)
+        # if residual is not None:
+        #     output += residual.to(output.dtype)
+        #     return output, residual  # 返回两个值
+        # return output
