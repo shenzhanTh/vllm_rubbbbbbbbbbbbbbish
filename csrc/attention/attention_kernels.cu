@@ -69,24 +69,24 @@ inline __device__ float block_sum(float* red_smem, float sum) {
   }
 
 /*---------------------------------------*/
-//   // Parallel reduction inside the warp.
-// #pragma unroll
-//   for (int mask = NUM_WARPS / 2; mask >= 1; mask /= 2) {
-//     sum += VLLM_SHFL_XOR_SYNC(sum, mask);
-//   }
-
-//   // Broadcast to other threads.
-//   return VLLM_SHFL_SYNC(sum, 0);
-// }
-
+  // Parallel reduction inside the warp.
 #pragma unroll
-    for (int mask = NUM_WARPS / 2; mask >= 1; mask /= 2) {
-        sum += __shfl_xor_sync(0xFFFFFFFF, sum, mask);
-    }
+  for (int mask = NUM_WARPS / 2; mask >= 1; mask /= 2) {
+    sum += VLLM_SHFL_XOR_SYNC(sum, mask);
+  }
 
-    // 返回最终结果
-    return __shfl_sync(0xFFFFFFFF, sum, 0);
+  // Broadcast to other threads.
+  return VLLM_SHFL_SYNC(sum, 0);
 }
+
+// #pragma unroll
+//     for (int mask = NUM_WARPS / 2; mask >= 1; mask /= 2) {
+//         sum += __shfl_xor_sync(0xFFFFFFFF, sum, mask);
+//     }
+
+//     // 返回最终结果
+//     return __shfl_sync(0xFFFFFFFF, sum, 0);
+// }
 /*---------------------------------------*/
 // TODO(woosuk): Merge the last two dimensions of the grid.
 // Grid: (num_heads, num_seqs, max_num_partitions).
