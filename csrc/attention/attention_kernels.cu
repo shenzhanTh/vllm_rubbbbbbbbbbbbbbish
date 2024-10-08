@@ -310,88 +310,57 @@ __device__ void paged_attention_kernel(
   constexpr int NUM_ROWS_PER_THREAD = DIVIDE_ROUND_UP(HEAD_SIZE, NUM_ROWS_PER_ITER);
 
   // NOTE(woosuk): We use FP32 for the accumulator for better accuracy.
-//   float accs[NUM_ROWS_PER_THREAD];
-// #pragma unroll
-//   for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
-//     accs[i] = 0.f;
-//   }
-
-/*-----------------------------------------*/
-  // 使用memset高效初始化累加器
-    float accs[NUM_ROWS_PER_THREAD] = {0};
-/*-----------------------------------------*/
-
+  float accs[NUM_ROWS_PER_THREAD];
+#pragma unroll
+  for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
+    accs[i] = 0.f;
+  }
 
   scalar_t zero_value;
   zero(zero_value);
-//   for (int block_idx = start_block_idx + warp_idx; block_idx < end_block_idx; block_idx += NUM_WARPS) {
-//     // NOTE(woosuk): The block number is stored in int32. However, we cast it to int64
-//     // because int32 can lead to overflow when this variable is multiplied by large numbers
-//     // (e.g., kv_block_stride).
-//     const int64_t physical_block_number = static_cast<int64_t>(block_table[block_idx]);
-//     const int physical_block_offset = (lane % NUM_V_VECS_PER_ROW) * V_VEC_SIZE;
-//     const int token_idx = block_idx * BLOCK_SIZE + physical_block_offset;
-//     L_vec logits_vec;
-//     from_float(logits_vec, *reinterpret_cast<Float_L_vec*>(logits + token_idx - start_token_idx));
-
-//     const cache_t* v_ptr = v_cache + physical_block_number * kv_block_stride
-//                                    + kv_head_idx * kv_head_stride;
-// #pragma unroll
-//     for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
-//       const int row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;
-//       if (row_idx < HEAD_SIZE) {
-//         const int offset = row_idx * BLOCK_SIZE + physical_block_offset;
-//         V_vec v_vec;
-//         if constexpr (IS_FP8_E5M2_KV_CACHE) {
-// #ifdef ENABLE_FP8_E5M2
-//           V_quant_vec v_quant_vec = *reinterpret_cast<const V_quant_vec*>(v_ptr + offset);
-//           // Vector conversion from V_quant_vec to V_vec.
-//           v_vec = fp8_e5m2_unscaled::vec_conversion<V_vec, V_quant_vec>(v_quant_vec);
-// #else
-//           assert(false);
-// #endif
-//         } else {
-//           v_vec = *reinterpret_cast<const V_vec*>(v_ptr + offset);
-//         }
-//         if (block_idx == num_context_blocks - 1) {
-//           // NOTE(woosuk): When v_vec contains the tokens that are out of the context,
-//           // we should explicitly zero out the values since they may contain NaNs.
-//           // See https://github.com/vllm-project/vllm/issues/641#issuecomment-1682544472
-//           scalar_t* v_vec_ptr = reinterpret_cast<scalar_t*>(&v_vec);
-// #pragma unroll
-//           for (int j = 0; j < V_VEC_SIZE; j++) {
-//             v_vec_ptr[j] = token_idx + j < context_len ? v_vec_ptr[j] : zero_value;
-//           }
-//         }
-//         accs[i] += dot(logits_vec, v_vec);
-//       }
-//     }
-//   }
-
-/*---------------------------------------------------------------*/
-    for (int block_idx = start_block_idx + warp_idx; block_idx < end_block_idx; block_idx += NUM_WARPS) {
+  for (int block_idx = start_block_idx + warp_idx; block_idx < end_block_idx; block_idx += NUM_WARPS) {
+    // NOTE(woosuk): The block number is stored in int32. However, we cast it to int64
+    // because int32 can lead to overflow when this variable is multiplied by large numbers
+    // (e.g., kv_block_stride).
     const int64_t physical_block_number = static_cast<int64_t>(block_table[block_idx]);
     const int physical_block_offset = (lane % NUM_V_VECS_PER_ROW) * V_VEC_SIZE;
     const int token_idx = block_idx * BLOCK_SIZE + physical_block_offset;
-
     L_vec logits_vec;
     from_float(logits_vec, *reinterpret_cast<Float_L_vec*>(logits + token_idx - start_token_idx));
 
-    const cache_t* v_ptr = v_cache + physical_block_number * kv_block_stride + kv_head_idx * kv_head_stride;
-
-    #pragma unroll
+    const cache_t* v_ptr = v_cache + physical_block_number * kv_block_stride
+                                   + kv_head_idx * kv_head_stride;
+#pragma unroll
     for (int i = 0; i < NUM_ROWS_PER_THREAD; i++) {
-        const int row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;
-        if (row_idx < HEAD_SIZE) {
-            const int offset = row_idx * BLOCK_SIZE + physical_block_offset;
-            V_vec v_vec = *reinterpret_cast<const V_vec*>(v_ptr + offset);
-            accs[i] += dot(logits_vec, v_vec);
+      const int row_idx = lane / NUM_V_VECS_PER_ROW + i * NUM_ROWS_PER_ITER;
+      if (row_idx < HEAD_SIZE) {
+        const int offset = row_idx * BLOCK_SIZE + physical_block_offset;
+        V_vec v_vec;
+        if constexpr (IS_FP8_E5M2_KV_CACHE) {
+#ifdef ENABLE_FP8_E5M2
+          V_quant_vec v_quant_vec = *reinterpret_cast<const V_quant_vec*>(v_ptr + offset);
+          // Vector conversion from V_quant_vec to V_vec.
+          v_vec = fp8_e5m2_unscaled::vec_conversion<V_vec, V_quant_vec>(v_quant_vec);
+#else
+          assert(false);
+#endif
+        } else {
+          v_vec = *reinterpret_cast<const V_vec*>(v_ptr + offset);
         }
+        if (block_idx == num_context_blocks - 1) {
+          // NOTE(woosuk): When v_vec contains the tokens that are out of the context,
+          // we should explicitly zero out the values since they may contain NaNs.
+          // See https://github.com/vllm-project/vllm/issues/641#issuecomment-1682544472
+          scalar_t* v_vec_ptr = reinterpret_cast<scalar_t*>(&v_vec);
+#pragma unroll
+          for (int j = 0; j < V_VEC_SIZE; j++) {
+            v_vec_ptr[j] = token_idx + j < context_len ? v_vec_ptr[j] : zero_value;
+          }
+        }
+        accs[i] += dot(logits_vec, v_vec);
+      }
     }
-}
-/*---------------------------------------------------------------*/
-
-
+  }
 
   // Perform reduction within each warp.
 #pragma unroll
