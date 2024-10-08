@@ -566,9 +566,9 @@ class LLMEngine:
     提取子样本处理逻辑：将处理子样本的代码提取到 process_child_sample 函数中。
     使用 as_completed：收集并行处理的结果并更新 child_seqs。'''
 
-
+    logger.info("123331313131")
     def process_child_sample(self, child_sample, parent):
-        logger.info("++++++++++++++++++++++++++++")
+        # logger.info("++++++++++++++++++++++++++++")
         new_child_seq_id = next(self.seq_counter)
         child = parent.fork(new_child_seq_id)
         child.append_token_id(child_sample.output_token, child_sample.logprobs)
