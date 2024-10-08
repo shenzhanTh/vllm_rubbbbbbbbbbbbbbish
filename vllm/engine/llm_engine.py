@@ -608,7 +608,7 @@ class LLMEngine:
 
                 # Process child samples in parallel
                 for child_sample in child_samples[:-1]:
-                    futures[executor.submit(process_child_sample, child_sample, parent)] = parent
+                    futures[executor.submit(self.process_child_sample, child_sample, parent)] = parent
 
                 # Process the last child sample directly
                 last_child_sample = child_samples[-1]
