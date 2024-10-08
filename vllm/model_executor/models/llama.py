@@ -68,6 +68,7 @@ class LlamaMLP(nn.Module):
             hidden_size, [intermediate_size] * 2,
             bias=False,
             linear_method=linear_method)
+        #TODO：尝试优化一下linear层
         self.down_proj = RowParallelLinear(intermediate_size,
                                            hidden_size,
                                            bias=False,

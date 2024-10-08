@@ -343,6 +343,11 @@ def _random_sample(
     for seq_group, is_prompt in zip(selected_seq_groups, is_prompts):
         seq_ids, sampling_params = seq_group
         num_parent_seqs = len(seq_ids)
+        #提前返回，减少计算
+        if not sampling_params.do_sample:
+            results.append(([], []))
+            continue
+
         if is_prompt:
             # Prompt phase.
             parent_ids = [0] * sampling_params.best_of

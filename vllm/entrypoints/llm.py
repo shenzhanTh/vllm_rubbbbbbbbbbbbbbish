@@ -33,7 +33,7 @@ class LLM:
     ) -> None:
         # Default argument optimization
         kwargs.setdefault("disable_log_stats", True)
-        logger.info("使用 kwargs.setdefault() 优化默认参数设置，减少了对 if-else 检查的依赖，提升了代码的可读性和执行效率。")
+        # logger.info("使用 kwargs.setdefault() 优化默认参数设置，减少了对 if-else 检查的依赖，提升了代码的可读性和执行效率。")
         engine_args = EngineArgs(
             model=model,
             tokenizer=tokenizer,
