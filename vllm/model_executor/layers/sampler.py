@@ -344,9 +344,9 @@ def _random_sample(
         seq_ids, sampling_params = seq_group
         num_parent_seqs = len(seq_ids)
         #提前返回，减少计算
-        if len(seq_group.sample_indices)==0:
-            results.append(([], []))
-            continue
+        # if len(seq_group.sample_indices)==0:
+        #     results.append(([], []))
+        #     continue
 
         if is_prompt:
             # Prompt phase.
