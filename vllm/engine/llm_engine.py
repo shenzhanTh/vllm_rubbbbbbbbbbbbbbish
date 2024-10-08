@@ -568,6 +568,7 @@ class LLMEngine:
 
 
     def process_child_sample(self, child_sample, parent):
+        logger.info("++++++++++++++++++++++++++++")
         new_child_seq_id = next(self.seq_counter)
         child = parent.fork(new_child_seq_id)
         child.append_token_id(child_sample.output_token, child_sample.logprobs)
