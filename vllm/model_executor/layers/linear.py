@@ -769,99 +769,100 @@ class RowParallelLinear(torch.nn.Module):
 
 
 # class RowParallelLinear(torch.nn.Module):
-    """线性层带行并行优化。"""
     
-    def __init__(self,
-                 input_size: int,
-                 output_size: int,
-                 bias: bool = True,
-                 input_is_parallel: bool = True,
-                 skip_bias_add: bool = False,
-                 params_dtype: Optional[torch.dtype] = None,
-                 reduce_results: bool = True,
-                 linear_method: Optional[LinearMethodBase] = None):
-        super().__init__()
-        self.input_size = input_size
-        self.output_size = output_size
-        self.input_is_parallel = input_is_parallel
-        self.reduce_results = reduce_results
-        self.skip_bias_add = skip_bias_add
-        logger.info("算子优化第一步")
+#     """线性层带行并行优化。"""
+    
+#     def __init__(self,
+#                  input_size: int,
+#                  output_size: int,
+#                  bias: bool = True,
+#                  input_is_parallel: bool = True,
+#                  skip_bias_add: bool = False,
+#                  params_dtype: Optional[torch.dtype] = None,
+#                  reduce_results: bool = True,
+#                  linear_method: Optional[LinearMethodBase] = None):
+#         super().__init__()
+#         self.input_size = input_size
+#         self.output_size = output_size
+#         self.input_is_parallel = input_is_parallel
+#         self.reduce_results = reduce_results
+#         self.skip_bias_add = skip_bias_add
+#         logger.info("算子优化第一步")
 
-        if params_dtype is None:
-            params_dtype = torch.get_default_dtype()
-        self.params_dtype = params_dtype
+#         if params_dtype is None:
+#             params_dtype = torch.get_default_dtype()
+#         self.params_dtype = params_dtype
 
-        # 获取并行度信息
-        self.tp_size = get_tensor_model_parallel_world_size()
-        self.input_size_per_partition = divide(input_size, self.tp_size)
+#         # 获取并行度信息
+#         self.tp_size = get_tensor_model_parallel_world_size()
+#         self.input_size_per_partition = divide(input_size, self.tp_size)
 
-        if linear_method is None:
-            linear_method = UnquantizedLinearMethod()
-        self.linear_method = linear_method
-        self.linear_weights = self.linear_method.create_weights(
-            self.input_size_per_partition, self.output_size, self.input_size,
-            self.output_size, self.params_dtype)
+#         if linear_method is None:
+#             linear_method = UnquantizedLinearMethod()
+#         self.linear_method = linear_method
+#         self.linear_weights = self.linear_method.create_weights(
+#             self.input_size_per_partition, self.output_size, self.input_size,
+#             self.output_size, self.params_dtype)
 
-        for name, weight in self.linear_weights.items():
-            if isinstance(weight, torch.Tensor):
-                self.register_parameter(name, weight)
-                set_weight_attrs(weight, {"weight_loader": self.weight_loader})
+#         for name, weight in self.linear_weights.items():
+#             if isinstance(weight, torch.Tensor):
+#                 self.register_parameter(name, weight)
+#                 set_weight_attrs(weight, {"weight_loader": self.weight_loader})
 
-        if bias:
-            self.bias = Parameter(torch.empty(self.output_size, dtype=params_dtype))
-            set_weight_attrs(self.bias, {"output_dim": 0, "weight_loader": self.weight_loader})
-        else:
-            self.register_parameter("bias", None)
+#         if bias:
+#             self.bias = Parameter(torch.empty(self.output_size, dtype=params_dtype))
+#             set_weight_attrs(self.bias, {"output_dim": 0, "weight_loader": self.weight_loader})
+#         else:
+#             self.register_parameter("bias", None)
         
-        # 是否使用编译优化
-        self.use_llama_nn = os.environ.get('LLAMA_NN') == '1'
+#         # 是否使用编译优化
+#         self.use_llama_nn = os.environ.get('LLAMA_NN') == '1'
 
-    @torch.compile  # 编译优化
-    def weight_loader(self, param: Parameter, loaded_weight: torch.Tensor):
-        tp_rank = get_tensor_model_parallel_rank()
-        input_dim = getattr(param, "input_dim", None)
-        param_data = param.data
+#     @torch.compile  # 编译优化
+#     def weight_loader(self, param: Parameter, loaded_weight: torch.Tensor):
+#         tp_rank = get_tensor_model_parallel_rank()
+#         input_dim = getattr(param, "input_dim", None)
+#         param_data = param.data
 
-        if input_dim is not None:
-            shard_size = param_data.shape[input_dim]
-            start_idx = tp_rank * shard_size
-            loaded_weight = loaded_weight.narrow(input_dim, start_idx, shard_size)
+#         if input_dim is not None:
+#             shard_size = param_data.shape[input_dim]
+#             start_idx = tp_rank * shard_size
+#             loaded_weight = loaded_weight.narrow(input_dim, start_idx, shard_size)
         
-        assert param_data.shape == loaded_weight.shape
+#         assert param_data.shape == loaded_weight.shape
 
-        if self.use_llama_nn:
-            loaded_weight = loaded_weight.transpose(0, 1).reshape(param_data.shape[0], -1)
+#         if self.use_llama_nn:
+#             loaded_weight = loaded_weight.transpose(0, 1).reshape(param_data.shape[0], -1)
         
-        param_data.copy_(loaded_weight)
+#         param_data.copy_(loaded_weight)
 
-    @torch.compile  # 编译优化
-    def forward(self, input_):
-        # 检查输入是否已经并行化
-        if self.input_is_parallel:
-            input_parallel = input_
-        else:
-            tp_rank = get_tensor_model_parallel_rank()
-            splitted_input = split_tensor_along_last_dim(input_, num_partitions=self.tp_size)
-            input_parallel = splitted_input[tp_rank].contiguous()  # 保证内存连续性
+#     @torch.compile  # 编译优化
+#     def forward(self, input_):
+#         # 检查输入是否已经并行化
+#         if self.input_is_parallel:
+#             input_parallel = input_
+#         else:
+#             tp_rank = get_tensor_model_parallel_rank()
+#             splitted_input = split_tensor_along_last_dim(input_, num_partitions=self.tp_size)
+#             input_parallel = splitted_input[tp_rank].contiguous()  # 保证内存连续性
         
-        # 确保输入形状正确以进行矩阵乘法
-        input_parallel = input_parallel if input_parallel.ndim > 2 else input_parallel.unsqueeze(1)
+#         # 确保输入形状正确以进行矩阵乘法
+#         input_parallel = input_parallel if input_parallel.ndim > 2 else input_parallel.unsqueeze(1)
         
-        # 并行化的矩阵乘法
-        output_parallel = self.linear_method.apply_weights(self.linear_weights, input_parallel)
+#         # 并行化的矩阵乘法
+#         output_parallel = self.linear_method.apply_weights(self.linear_weights, input_parallel)
 
-        if self.reduce_results and self.tp_size > 1:
-            output_ = tensor_model_parallel_all_reduce(output_parallel)
-        else:
-            output_ = output_parallel
+#         if self.reduce_results and self.tp_size > 1:
+#             output_ = tensor_model_parallel_all_reduce(output_parallel)
+#         else:
+#             output_ = output_parallel
 
-        # 处理偏置
-        if not self.skip_bias_add:
-            output = output_ + self.bias if self.bias is not None else output_
-            output_bias = None
-        else:
-            output = output_
-            output_bias = self.bias
+#         # 处理偏置
+#         if not self.skip_bias_add:
+#             output = output_ + self.bias if self.bias is not None else output_
+#             output_bias = None
+#         else:
+#             output = output_
+#             output_bias = self.bias
 
-        return output, output_bias
+#         return output, output_bias
