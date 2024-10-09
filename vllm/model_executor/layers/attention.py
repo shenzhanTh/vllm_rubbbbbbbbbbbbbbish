@@ -526,3 +526,4 @@ def _paged_attention(query: torch.Tensor, key_cache: torch.Tensor,
                                 block_size, input_metadata.max_context_len, alibi_slopes,
                                 input_metadata.kv_cache_dtype)
     return output
+
