@@ -21,18 +21,18 @@ __global__ void rms_norm_kernel(
 
   //横线之间是修改的，注释的是先前的
 
-  // for (int idx = threadIdx.x; idx < hidden_size; idx += blockDim.x) {
-  //   const float x = (float) input[blockIdx.x * hidden_size + idx];
-  //   variance += x * x;
-  // }
-  /*-------------------------------------*/
-  int idx = threadIdx.x + blockIdx.x * blockDim.x;
-
-  // 展开循环
-  for (int i = idx; i < hidden_size; i += blockDim.x * gridDim.x) {
-    float x = (float) input[i];
+  for (int idx = threadIdx.x; idx < hidden_size; idx += blockDim.x) {
+    const float x = (float) input[blockIdx.x * hidden_size + idx];
     variance += x * x;
   }
+  /*-------------------------------------*/
+  // int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+  // // 展开循环
+  // for (int i = idx; i < hidden_size; i += blockDim.x * gridDim.x) {
+  //   float x = (float) input[i];
+  //   variance += x * x;
+  // }
   /*-------------------------------------*/
 
   variance = blockReduceSum<float>(variance);
@@ -41,17 +41,17 @@ __global__ void rms_norm_kernel(
   }
   __syncthreads();
 
-  // for (int idx = threadIdx.x; idx < hidden_size; idx += blockDim.x) {
-  //   float x = (float) input[blockIdx.x * hidden_size + idx];
-  //   out[blockIdx.x * hidden_size + idx] = ((scalar_t) (x * s_variance)) * weight[idx];
-  // }
+  for (int idx = threadIdx.x; idx < hidden_size; idx += blockDim.x) {
+    float x = (float) input[blockIdx.x * hidden_size + idx];
+    out[blockIdx.x * hidden_size + idx] = ((scalar_t) (x * s_variance)) * weight[idx];
+  }
 
   /*-------------------------------------*/
 
-  for (int i = idx; i < hidden_size; i += blockDim.x * gridDim.x) {
-    float x = (float) input[i];
-    out[i] = ((scalar_t) (x * s_variance)) * weight[i % hidden_size];
-  }
+  // for (int i = idx; i < hidden_size; i += blockDim.x * gridDim.x) {
+  //   float x = (float) input[i];
+  //   out[i] = ((scalar_t) (x * s_variance)) * weight[i % hidden_size];
+  // }
   /*-------------------------------------*/
 
 
@@ -69,22 +69,22 @@ __global__ void fused_add_rms_norm_kernel(
   __shared__ float s_variance;
   float variance = 0.0f;
 
-  // for (int idx = threadIdx.x; idx < hidden_size; idx += blockDim.x) {
-  //   float x = (float) input[blockIdx.x * hidden_size + idx];
-  //   x += (float) residual[blockIdx.x * hidden_size + idx];
-  //   variance += x * x;
-  //   residual[blockIdx.x * hidden_size + idx] = (scalar_t) x;
-  // }
+  for (int idx = threadIdx.x; idx < hidden_size; idx += blockDim.x) {
+    float x = (float) input[blockIdx.x * hidden_size + idx];
+    x += (float) residual[blockIdx.x * hidden_size + idx];
+    variance += x * x;
+    residual[blockIdx.x * hidden_size + idx] = (scalar_t) x;
+  }
   
   /*--------------------------------------*/
-  int idx = threadIdx.x + blockIdx.x * blockDim.x;
+  // int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
-  // 展开循环
-  for (int i = idx; i < hidden_size; i += blockDim.x * gridDim.x) {
-    float x = (float) input[i] + (float) residual[i];
-    variance += x * x;
-    residual[i] = (scalar_t) x;
-  }
+  // // 展开循环
+  // for (int i = idx; i < hidden_size; i += blockDim.x * gridDim.x) {
+  //   float x = (float) input[i] + (float) residual[i];
+  //   variance += x * x;
+  //   residual[i] = (scalar_t) x;
+  // }
   /*--------------------------------------*/
 
   variance = blockReduceSum<float>(variance);
@@ -93,16 +93,16 @@ __global__ void fused_add_rms_norm_kernel(
   }
   __syncthreads();
 
-  // for (int idx = threadIdx.x; idx < hidden_size; idx += blockDim.x) {
-  //   float x = (float) residual[blockIdx.x * hidden_size + idx];
-  //   input[blockIdx.x * hidden_size + idx] = ((scalar_t) (x * s_variance)) * weight[idx];
-  // }
+  for (int idx = threadIdx.x; idx < hidden_size; idx += blockDim.x) {
+    float x = (float) residual[blockIdx.x * hidden_size + idx];
+    input[blockIdx.x * hidden_size + idx] = ((scalar_t) (x * s_variance)) * weight[idx];
+  }
 
   /*--------------------------------------*/
-  for (int i = idx; i < hidden_size; i += blockDim.x * gridDim.x) {
-    float x = (float) residual[i];
-    input[i] = ((scalar_t) (x * s_variance)) * weight[i % hidden_size];
-  }
+  // for (int i = idx; i < hidden_size; i += blockDim.x * gridDim.x) {
+  //   float x = (float) residual[i];
+  //   input[i] = ((scalar_t) (x * s_variance)) * weight[i % hidden_size];
+  // }
   /*--------------------------------------*/
 }
 
