@@ -335,7 +335,7 @@ def _random_sample(
     selected_seq_groups: List[Tuple[List[int], SamplingParams]],
     is_prompts: List[bool],
     random_samples: torch.Tensor,
-    pruning_threshold: float = 0.3
+    pruning_threshold: float = 0.7
 ) -> List[Tuple[List[int], List[int]]]:
     # Find the maximum best_of value of the prompt phase requests.
     random_samples = random_samples.cpu()
@@ -356,7 +356,6 @@ def _random_sample(
                                             num_parent_seqs, 0].tolist()
         results.append((next_token_ids, parent_ids))
         sample_idx += num_parent_seqs
-    # logger.info(f"find a tokens its next_token_ids is %s",next_token_ids)
     return results
     #     else:
     #         # Generation phase.
