@@ -356,6 +356,7 @@ def _random_sample(
                                             num_parent_seqs, 0].tolist()
         results.append((next_token_ids, parent_ids))
         sample_idx += num_parent_seqs
+        logger.info(f"Find a token, its next_token_ids are: {next_token_ids}")
     return results
     #     else:
     #         # Generation phase.
