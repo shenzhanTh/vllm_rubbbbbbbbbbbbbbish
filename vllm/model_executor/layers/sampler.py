@@ -335,6 +335,7 @@ def _random_sample(
     selected_seq_groups: List[Tuple[List[int], SamplingParams]],
     is_prompts: List[bool],
     random_samples: torch.Tensor,
+    pruning_threshold: float = 0.7
 ) -> List[Tuple[List[int], List[int]]]:
     # Find the maximum best_of value of the prompt phase requests.
     random_samples = random_samples.cpu()
@@ -343,23 +344,40 @@ def _random_sample(
     for seq_group, is_prompt in zip(selected_seq_groups, is_prompts):
         seq_ids, sampling_params = seq_group
         num_parent_seqs = len(seq_ids)
-        #提前返回，减少计算
-        # if len(seq_group.sample_indices)==0:
-        #     results.append(([], []))
-        #     continue
-
         if is_prompt:
             # Prompt phase.
             parent_ids = [0] * sampling_params.best_of
             next_token_ids = random_samples[
                 sample_idx, :sampling_params.best_of].tolist()
+    #     else:
+    #         # Generation phase.
+    #         parent_ids = list(range(num_parent_seqs))
+    #         next_token_ids = random_samples[sample_idx:sample_idx +
+    #                                         num_parent_seqs, 0].tolist()
+    #     results.append((next_token_ids, parent_ids))
+    #     sample_idx += num_parent_seqs
+    # return results
         else:
             # Generation phase.
             parent_ids = list(range(num_parent_seqs))
-            next_token_ids = random_samples[sample_idx:sample_idx +
-                                            num_parent_seqs, 0].tolist()
+            next_token_logits = random_samples[sample_idx:sample_idx + num_parent_seqs, 0]
+            
+            # 应用剪枝，移除低于阈值的选项
+            valid_indices = next_token_logits > pruning_threshold
+            next_token_ids = torch.where(valid_indices)[0].tolist()
+            
+            # 如果没有有效的选项，则返回
+            if not next_token_ids:
+                continue
+            
+            # 中断条件：如果找到好的结果，提前返回
+            best_token = next_token_ids[0]
+            results.append(([best_token], parent_ids))
+            return results
+        
         results.append((next_token_ids, parent_ids))
         sample_idx += num_parent_seqs
+
     return results
 
 
