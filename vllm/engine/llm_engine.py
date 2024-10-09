@@ -99,7 +99,7 @@ class LLMEngine:
         self.log_stats = log_stats
         self._verify_args()
 			#logger.debug(f"Config: model_config={model_config}, cache_config={cache_config}")
-        logger.info(f"1\n2\n3\n4\nConfig heiheihie: model_config={model_config}, cache_config={cache_config}\n\n")
+        # logger.info(f"1\n2\n3\n4\nConfig heiheihie: model_config={model_config}, cache_config={cache_config}\n\n")
         self._init_tokenizer()
         self.seq_counter = Counter()
 

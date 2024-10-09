@@ -24,7 +24,7 @@ namespace vllm {
 template<typename T>
 __inline__ __device__ T warpReduceSum(T val) {
 #pragma unroll
-  for (int mask = 16; mask > 0; mask >>= 1)
+  for (int mask = WARP_SIZE/2; mask > 0; mask >>= 1)
     val += VLLM_SHFL_XOR_SYNC(val, mask);
   return val;
 }
@@ -40,7 +40,7 @@ __inline__ __device__ constexpr int _calculateWidShift(int warp_size) {
 /* Calculate the sum of all elements in a block */
 template<typename T>
 __inline__ __device__ T blockReduceSum(T val) {
-  static __shared__ T shared[32];
+  static __shared__ T shared[WARP_SIZE];
   constexpr auto LANE_MASK = _calculateLaneMask(WARP_SIZE);
   constexpr auto WID_SHIFT = _calculateWidShift(WARP_SIZE);
   int lane = threadIdx.x & LANE_MASK;
@@ -55,7 +55,7 @@ __inline__ __device__ T blockReduceSum(T val) {
 
   // Modify from blockDim.x << 5 to blockDim.x / 32. to prevent
   // blockDim.x is not divided by 32
-  val = (threadIdx.x < (blockDim.x / 32.f)) ? shared[lane] : (T)(0.0f);
+  val = (threadIdx.x < (blockDim.x / WARP_SIZE*1.0f)) ? shared[lane] : (T)(0.0f);
   val = warpReduceSum<T>(val);
   return val;
 }
