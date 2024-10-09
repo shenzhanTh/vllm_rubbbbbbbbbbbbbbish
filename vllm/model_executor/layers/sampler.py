@@ -373,6 +373,8 @@ def _random_sample(
             # 中断条件：如果找到好的结果，提前返回
             best_token = next_token_ids[0]
             results.append(([best_token], parent_ids))
+            while len(results) < len(selected_seq_groups):
+                results.append(([], []))  # Append default value
             return results
         
         results.append((next_token_ids, parent_ids))
