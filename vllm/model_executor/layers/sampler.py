@@ -349,38 +349,38 @@ def _random_sample(
             parent_ids = [0] * sampling_params.best_of
             next_token_ids = random_samples[
                 sample_idx, :sampling_params.best_of].tolist()
-        else:
-            # Generation phase.
-            parent_ids = list(range(num_parent_seqs))
-            next_token_ids = random_samples[sample_idx:sample_idx +
-                                            num_parent_seqs, 0].tolist()
-        results.append((next_token_ids, parent_ids))
-        sample_idx += num_parent_seqs
-    return results
     #     else:
     #         # Generation phase.
     #         parent_ids = list(range(num_parent_seqs))
-    #         next_token_logits = random_samples[sample_idx:sample_idx + num_parent_seqs, 0]
-            
-    #         # 应用剪枝，移除低于阈值的选项
-    #         valid_indices = next_token_logits > pruning_threshold
-    #         next_token_ids = torch.where(valid_indices)[0].tolist()
-            
-    #         # 如果没有有效的选项，则返回
-    #         if not next_token_ids:
-    #             continue
-            
-    #         # 中断条件：如果找到好的结果，提前返回
-    #         best_token = next_token_ids[0]
-    #         results.append(([best_token], parent_ids))
-    #         while len(results) < len(selected_seq_groups):
-    #             results.append(([], []))  # Append default value
-    #         return results
-        
+    #         next_token_ids = random_samples[sample_idx:sample_idx +
+    #                                         num_parent_seqs, 0].tolist()
     #     results.append((next_token_ids, parent_ids))
     #     sample_idx += num_parent_seqs
-
     # return results
+        else:
+            # Generation phase.
+            parent_ids = list(range(num_parent_seqs))
+            next_token_logits = random_samples[sample_idx:sample_idx + num_parent_seqs, 0]
+            
+            # 应用剪枝，移除低于阈值的选项
+            valid_indices = next_token_logits > pruning_threshold
+            next_token_ids = torch.where(valid_indices)[0].tolist()
+            
+            # 如果没有有效的选项，则返回
+            if not next_token_ids:
+                continue
+            
+            # 中断条件：如果找到好的结果，提前返回
+            best_token = next_token_ids[0]
+            results.append(([best_token], parent_ids))
+            while len(results) < len(selected_seq_groups):
+                results.append(([], []))  # Append default value
+            return results
+        
+        results.append((next_token_ids, parent_ids))
+        sample_idx += num_parent_seqs
+
+    return results
 
 
 def _beam_search_sample(
